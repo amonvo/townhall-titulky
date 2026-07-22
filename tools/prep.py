@@ -242,12 +242,27 @@ def analyze_pptx(zf):
     return {"sldSz": (cx, cy), "slides": slides, "warnings": warnings}
 
 
-def build_content(pptx_path, pdf_path=None, out_dir="content", allow_remux=True,
-                  verbose=True):
+# Pořadí kroků hlášených přes progress_cb (využívá server API + wizard UI).
+PROGRESS_STEPS = ("analyze", "videos", "pdf", "config", "done")
+
+
+def prepare_content(pptx_path, pdf_path=None, out_dir="content",
+                    allow_remux=True, progress_cb=None):
     """
-    Spustí celou pipeline: analyzuj PPTX, vytáhni videa, (volitelně remuxuj MOV),
-    zkopíruj PDF, zapiš config.json. Vrátí dict configu.
+    Importovatelná pipeline (beze změny chování CLI): analyzuj PPTX, vytáhni
+    videa, (volitelně remuxuj MOV), zkopíruj PDF, zapiš config.json.
+
+    progress_cb(step_id, message) se volá na krocích PROGRESS_STEPS:
+    analyze → videos → pdf → config → done.
+
+    Vrací summary dict: {deckName, slideCount,
+                         videos: [{slide, file, x, y, w, h}], warnings: [str]}
+    (stejná data, která jdou do config.json).
     """
+    def emit(step, message):
+        if progress_cb:
+            progress_cb(step, message)
+
     pptx_path = os.path.abspath(pptx_path)
     out_dir = os.path.abspath(out_dir)
     videos_dir = os.path.join(out_dir, "videos")
@@ -260,11 +275,13 @@ def build_content(pptx_path, pdf_path=None, out_dir="content", allow_remux=True,
 
     ffmpeg = _find_ffmpeg() if allow_remux else None
 
+    emit("analyze", "Analyzuji prezentaci…")
     with zipfile.ZipFile(pptx_path, "r") as zf:
         info = analyze_pptx(zf)
         cx, cy = info["sldSz"]
         warnings = list(info["warnings"])
 
+        emit("videos", "Extrahuji videa…")
         config_videos = []
         for slide in info["slides"]:
             for v in slide["videos"]:
@@ -320,17 +337,23 @@ def build_content(pptx_path, pdf_path=None, out_dir="content", allow_remux=True,
         slide_count = len(info["slides"])
 
     # PDF
-    pdf_ref = None
+    emit("pdf", "Připravuji PDF…")
     if pdf_path:
         pdf_src = os.path.abspath(pdf_path)
-        pdf_dst = os.path.join(out_dir, "slides.pdf")
-        shutil.copyfile(pdf_src, pdf_dst)
-        pdf_ref = "slides.pdf"
+        pdf_dst = os.path.abspath(os.path.join(out_dir, "slides.pdf"))
+        # Fix SameFileError: --pdf může ukazovat přímo na content/slides.pdf
+        # (po vyřešení cest tentýž soubor) → kopii tiše přeskoč.
+        # os.path.samefile jen když obě cesty existují.
+        same = (os.path.exists(pdf_src) and os.path.exists(pdf_dst)
+                and os.path.samefile(pdf_src, pdf_dst))
+        if not same:
+            shutil.copyfile(pdf_src, pdf_dst)
 
     deck_name = os.path.splitext(os.path.basename(pptx_path))[0]
 
+    emit("config", "Zapisuji config.json…")
     config = {
-        "pdf": pdf_ref if pdf_ref else "slides.pdf",
+        "pdf": "slides.pdf",
         "slideCount": slide_count,
         "deckName": deck_name,
         "videos": config_videos,
@@ -340,10 +363,32 @@ def build_content(pptx_path, pdf_path=None, out_dir="content", allow_remux=True,
     with open(config_path, "w", encoding="utf-8") as fh:
         json.dump(config, fh, ensure_ascii=False, indent=2)
 
-    if verbose:
-        _print_summary(config, warnings, out_dir, has_pdf=bool(pdf_ref))
+    emit("done", "Hotovo")
+    return {
+        "deckName": deck_name,
+        "slideCount": slide_count,
+        "videos": config_videos,
+        "warnings": warnings,
+    }
 
-    return {"config": config, "warnings": warnings, "config_path": config_path}
+
+def build_content(pptx_path, pdf_path=None, out_dir="content", allow_remux=True,
+                  verbose=True):
+    """
+    Zpětně kompatibilní obálka nad prepare_content (stejné CLI chování i návratový
+    tvar jako dřív: {config, warnings, config_path}).
+    """
+    summary = prepare_content(pptx_path, pdf_path=pdf_path, out_dir=out_dir,
+                              allow_remux=allow_remux)
+    config_path = os.path.join(os.path.abspath(out_dir), "config.json")
+    with open(config_path, "r", encoding="utf-8") as fh:
+        config = json.load(fh)
+
+    if verbose:
+        _print_summary(config, summary["warnings"], out_dir, has_pdf=bool(pdf_path))
+
+    return {"config": config, "warnings": summary["warnings"],
+            "config_path": config_path}
 
 
 def _print_summary(config, warnings, out_dir, has_pdf):
@@ -528,6 +573,32 @@ def self_test():
             check(True, "config.json je validní JSON")
         except Exception as e:
             check(False, "config.json validní JSON (%s)" % e)
+
+        # 9) Same-file PDF: --pdf ukazuje přímo na content/slides.pdf →
+        #    nesmí spadnout (SameFileError) a soubor nesmí být zničen.
+        pdf_in_out = os.path.join(out, "slides.pdf")
+        pdf_bytes = b"%PDF-1.4\n%%EOF\n"
+        with open(pdf_in_out, "wb") as fh:
+            fh.write(pdf_bytes)
+        try:
+            build_content(pptx, pdf_path=pdf_in_out, out_dir=out,
+                          allow_remux=False, verbose=False)
+            check(True, "same-file PDF (content/slides.pdf → sám sebe) nespadne")
+            with open(pdf_in_out, "rb") as fh:
+                check(fh.read() == pdf_bytes, "same-file PDF nebyl poškozen")
+        except Exception as e:
+            check(False, "same-file PDF nespadne (%s: %s)" % (type(e).__name__, e))
+
+        # 10) prepare_content: progress_cb hlásí kroky ve správném pořadí
+        steps = []
+        summary = prepare_content(pptx, pdf_path=None, out_dir=out,
+                                  allow_remux=False,
+                                  progress_cb=lambda s, m: steps.append(s))
+        check(steps == list(PROGRESS_STEPS),
+              "progress_cb kroky %s (bylo: %s)" % ("→".join(PROGRESS_STEPS), steps))
+        check(summary["deckName"] == "selftest" and summary["slideCount"] == 2
+              and len(summary["videos"]) == 1 and isinstance(summary["warnings"], list),
+              "prepare_content vrací summary {deckName, slideCount, videos, warnings}")
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
