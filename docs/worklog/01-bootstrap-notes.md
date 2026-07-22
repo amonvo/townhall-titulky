@@ -116,3 +116,65 @@ Zde jsou zaznamenaná rozhodnutí učiněná při nejasnostech (dle ground rule 
   pills ve výchozím stavu, EN/UK labely, český řádek skrytý → `C` přepíná, `+/-`
   mění a klampuje `--scale` na 0.7–1.5, `start()` funguje a aplikace dál naviguje.
   Reálný tok mikrofonu ověří operátor (sekce VERIFY).
+
+## Fáze 5 — start panel, launcher, docs
+
+- **Start panel jako samostatný modul `app/panel.js`** (není v seznamu souborů ve
+  specifikaci — ta panel řadí pod „index.html completed in Phases 3–5"). Default:
+  vlastní modul drží `app.js` jako čistý orchestrátor, konzistentně s captions.js.
+  Panel se staví v JS (jako captions UI), index.html se nemění.
+- Panel: titulek, deck name + počet slajdů z configu (české plurály 1 slajd /
+  2–4 slajdy / 5+ slajdů), kompat. varování (ne-Chrome či chybějící
+  SpeechRecognition, `file://`, chybějící obsah), primární tlačítko
+  `Spustit prezentaci s titulky` (#2F6FEB) + ghost `Jen prezentace (bez titulků)`,
+  legenda kláves. `Esc` panel znovu otevře; v běžícím stavu nabízí `Pokračovat`
+  (primární) + `Zastavit titulky`. `onMicDenied` z captions.js zobrazí panel
+  s červenou zprávou.
+- **Rozhodnutí (default):** dokud je panel otevřený, klávesy aplikace (šipky,
+  mezerník, F, +/−, C…) se blokují capture-fází keydown, aby prezentace
+  „neujížděla" pod overlayem. Esc při zavřeném panelu ho otevírá (bubble listener).
+- `slides.js` nově vrací `config` (i při selhání PDF), aby panel měl deck name
+  a počet slajdů; jinak beze změny.
+- Odstraněn mrtvý CSS blok `#boot-status` (element zmizel už ve Fázi 3).
+- **Netrackované `tools/serve.ps1` a `tools/serve.py` existovaly v repu už před
+  Fází 5** — zkontrolovány proti specifikaci a převzaty: `serve.ps1` =
+  HttpListener, MIME mapa (.html/.css/.js/.mjs/.json/.pdf/.mp4/.mov), single-range
+  `bytes=start-`/`start-end`/`-N` s 206/Accept-Ranges/Content-Range, ochrana proti
+  path traversal. `serve.py` = stdlib server se stejnou MIME mapou a Range
+  podporou, navíc **vícevláknový** (ThreadingMixIn).
+- **Rozhodnutí — pořadí serverů ve `start.bat` (odchylka od litery specifikace):**
+  specifikace navrhuje `py -3 -m http.server` → `python -m http.server` →
+  `serve.ps1`. Holý `http.server` ale appku vůbec nenačte (`.mjs` → `text/plain`,
+  strict MIME checking — zjištění Fáze 1) a neumí Range. Proto `start.bat` spouští
+  `tools/serve.py` (`py -3` → `python`) a až bez Pythonu `serve.ps1`. Python
+  server je default, protože je vícevláknový (paralelní requesty při načítání
+  aplikace + streamování videa), `serve.ps1` obsluhuje požadavky sériově.
+  Oba servery ověřeny curl testy: správné MIME (`.mjs` → `text/javascript`)
+  a Range → `206 Partial Content` se správným `Content-Range` (`bytes=0-99`
+  i `bytes=100-`).
+- `.bat` soubory jsou záměrně **bez diakritiky** (ASCII) — cmd s výchozí kódovou
+  stránkou cp852/1250 by UTF-8 texty komolil. PID serveru se získává přes
+  `Start-Process -PassThru` (batch `start` PID vracet neumí); `taskkill /T`
+  ve `stop.bat` zabije i child `python.exe` pod `py.exe`. Cesty všude
+  v uvozovkách (cesta k repu obsahuje mezery).
+- `start.bat` navíc: pokud port 8137 už odpovídá, server se nespouští znovu
+  (jen se otevře prohlížeč); Chrome se hledá na obvyklých instalačních cestách
+  (ProgramFiles, ProgramFiles(x86), LocalAppData), jinak výchozí prohlížeč.
+- **Ověření Fáze 5:**
+  - `node --check`: všech 5 app modulů + oba vendorované `.mjs` — OK.
+  - `py -3 tools/prep.py --self-test` — exit 0, všechny asercie OK.
+  - curl testy MIME + Range na `serve.py` (8137) i `serve.ps1` (8138) — OK
+    (viz výše).
+  - Puppeteer + reálný Chrome (headless): **14/14 asercí OK, 0 chyb v konzoli** —
+    panel viditelný na startu se správným titulkem/podtitulkem/tlačítky/legendou,
+    šipka při otevřeném panelu nenaviguje, `Jen prezentace` zavře panel a
+    navigace funguje, `Esc` panel znovu otevře, `Spustit` → mikrofon běží +
+    panel skryt, `Esc` v běhu → `Zastavit titulky`/`Pokračovat`, `Zastavit`
+    vrátí start tlačítka.
+  - `start.bat` end-to-end: server nastartoval přes `py -3 tools\serve.py`,
+    `.server.pid` zapsán, `GET /` → 200, Chrome otevřen. `stop.bat`: proces
+    zabit, `.server.pid` smazán, port už neodpovídá.
+- `content/source.pptx` stále neexistuje → prep proti reálnému decku neběžel
+  (jen zaznamenáno dle akceptace Fáze 2; operátor postupuje dle README).
+- Screenshoty a reálný mikrofonní tok jsou na operátorovi (sekce VERIFY promptu
+  — „do not execute, just leave the app ready").
