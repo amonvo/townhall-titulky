@@ -348,3 +348,151 @@ body {
   padding: .1em .5em;
   margin: 0 .1em;
 }
+
+/* ===== Wizard nahrání prezentace ===== */
+#wizard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: rgba(4, 8, 14, .82);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#wizard-overlay.hidden { display: none; }
+
+.wizard-box {
+  background: #10161F;
+  border: 1px solid #1E2833;
+  border-radius: 12px;
+  padding: 4vh 4.5vh;
+  width: min(96vh, 92vw);
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .6);
+}
+
+.wizard-text {
+  font-size: 2vh;
+  color: #F5F7FA;
+  line-height: 1.6;
+}
+
+.wizard-text code {
+  color: #FFD966;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: .9em;
+}
+
+.wizard-hint {
+  margin-top: 1.6vh;
+  font-size: 1.5vh;
+  color: #64707E;
+}
+
+.drop-zone {
+  min-height: 40vh;
+  border: 2px dashed rgba(255, 255, 255, .18);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4vh;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #8B95A1;
+  transition: border-color .15s ease, box-shadow .15s ease, color .15s ease;
+}
+
+.drop-zone.drag {
+  border-color: #2F6FEB;
+  box-shadow: inset 0 0 32px rgba(47, 111, 235, .22), 0 0 18px rgba(47, 111, 235, .3);
+  color: #F5F7FA;
+}
+
+.drop-icon { font-size: 6vh; opacity: .75; }
+.drop-main { font-size: 2.4vh; color: #F5F7FA; }
+.drop-sub  { font-size: 1.7vh; }
+
+.drop-err {
+  color: #FF8F7D;
+  font-size: 1.7vh;
+  min-height: 2.2vh;
+}
+
+.wizard-steps {
+  list-style: none;
+  margin: 2vh auto;
+  padding: 0;
+  max-width: 62vh;
+  text-align: left;
+}
+
+.step-row {
+  display: flex;
+  gap: 1.4vh;
+  align-items: center;
+  font-size: 2vh;
+  color: #8B95A1;
+  padding: 1vh 0;
+}
+
+.step-row .step-ico {
+  width: 3vh;
+  text-align: center;
+  flex: none;
+}
+
+.step-row.pending { opacity: .55; }
+.step-row.running { color: #F5F7FA; }
+.step-row.done    { color: #7DDBA3; }
+.step-row.failed  { color: #FF8F7D; }
+.step-row.manual  { color: #FFD966; }
+
+.spinner {
+  display: inline-block;
+  width: 1.8vh;
+  height: 1.8vh;
+  border: .3vh solid rgba(255, 255, 255, .2);
+  border-top-color: #2F6FEB;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.wizard-summary {
+  background: #0B0F14;
+  border: 1px solid #1E2833;
+  border-radius: 10px;
+  padding: 3vh;
+  margin: 1vh auto 0;
+  max-width: 62vh;
+}
+
+.wizard-summary-deck {
+  font-size: 2.8vh;
+  font-weight: 600;
+  color: #F5F7FA;
+  margin-bottom: .8vh;
+}
+
+.wizard-summary-info {
+  font-size: 2vh;
+  color: #8B95A1;
+}
+
+.wizard-manual {
+  color: #FFD966;
+  font-size: 2vh;
+  line-height: 1.6;
+}
+
+.wizard-error {
+  color: #FF8F7D;
+  font-size: 2vh;
+  line-height: 1.6;
+}

@@ -20,6 +20,7 @@ const APP_KEYS = new Set([
 let overlayEl, subEl, warnsEl, msgEl, buttonsEl;
 let slidesApi = null;
 let captionsApi = null;
+let onUpload = null;    // otevře wizard nahrání prezentace (napojuje app.js)
 let visible = false;
 
 function czPluralSlides(n) {
@@ -139,6 +140,12 @@ function refreshButtons() {
     if (!isSpeechSupported()) startBtn.disabled = true;
     buttonsEl.appendChild(startBtn);
     buttonsEl.appendChild(makeButton("Jen prezentace (bez titulků)", "ghost", () => hide()));
+    if (typeof onUpload === "function") {
+      buttonsEl.appendChild(makeButton("Nahrát novou prezentaci", "ghost", () => {
+        hide();
+        onUpload();
+      }));
+    }
   }
 }
 
@@ -196,6 +203,7 @@ function onKeyOpen(e) {
 export function initPanel(opts) {
   slidesApi = opts.slides || null;
   captionsApi = opts.captions;
+  onUpload = opts.onUpload || null;
   buildPanel();
   window.addEventListener("keydown", onKeyCapture, true);
   window.addEventListener("keydown", onKeyOpen);

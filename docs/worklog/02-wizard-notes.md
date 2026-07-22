@@ -76,3 +76,46 @@ Rozhodnutí při nejasnostech (ground rule 5: sensible default + poznámka, neza
   400 ne-multipart, 411 chunked, extrakce videa, config zapsán, deckName
   přepsán, žádný slides.tmp.pdf po selhání, obnova content/). `serve.ps1`:
   `/api/*` → 501 s českou JSON hláškou, statika dál 200.
+
+## Fáze 3 — wizard UI
+
+- Wizard je samostatný modul `app/wizard.js` (konzistentně s panel.js);
+  obrazovky: confirm → drop → progress → done | manual (needs_manual_pdf)
+  | error. Stavy řádků: ○ pending / spinner running / ✓ done / ✕ failed.
+  Upload přes XHR (progress events → % v řádku „Nahrávání souboru"),
+  vše ostatní `fetch`; poll 500 ms.
+- **Rozhodnutí (default):** Esc zavírá wizard z obrazovek `drop` i `confirm`
+  (spec jmenuje jen drop zónu; confirm je také „nic neběží"). Z progress/done/
+  manual/error Esc nezavírá (mid-job zákaz dle spec; done/manual mají explicitní
+  tlačítka). Esc se vždy pohltí, aby neotevřel start panel pod wizardem.
+- **Nalezená chyba (capture listenery na stejném uzlu):** Esc ve wizardu zavřel
+  wizard a `onClose` ukázal start panel — jenže tentýž keydown pak doběhl do
+  capture listeneru panelu (stopPropagation nezastaví další listenery na tomtéž
+  uzlu), panel byl už viditelný → hned se zase schoval. Oprava:
+  `stopImmediatePropagation()` v Esc větvi wizardu.
+- Tlačítko „Nahrát novou prezentaci" je na start panelu jen v ne-running stavu
+  (během běžících titulků se deck nemění; nejdřív „Zastavit titulky").
+- Auto-otevření wizardu při startu: app.js volá `/api/content/status`; když
+  `!hasPdf || !hasConfig` → panel se schová a otevře se drop zóna
+  (`skipConfirm`). Při 501 (statický serve.ps1) nebo výpadku API se wizard
+  neotvírá — panel zůstává se svým varováním o chybějícím obsahu; kliknutí na
+  „Nahrát novou prezentaci" pak 501 hlášku serveru zobrazí v error obrazovce.
+- **Poznámka ke „konzole čistá":** při záměrně chybějícím obsahu browser VŽDY
+  zaloguje resource-error `content/config.json 404` (fetch selhání loguje síťová
+  vrstva, JS ho potlačit nemůže; appka stav řeší setup hláškou). Test tento
+  jeden očekávaný řádek filtruje podle URL; cokoli jiného = fail.
+- **Incident (stale server):** na portu 8137 běží operátorův server spuštěný
+  přes start.bat ve 21:17 — tedy kód PŘED commitem API (22:24) → `/api/*`
+  vrací statické 404. Proces jsem nezabíjel (živá práce operátora); testy běží
+  na izolovaných portech 8151/8152 (app používá relativní URL). Operátor musí
+  před použitím wizardu server restartovat: `stop.bat` + `start.bat` (uvedeno
+  v souhrnu i README).
+- Puppeteer testy zálohují/obnovují v `content/` opět jen fixní pipeline
+  názvy — operátorův deck (otevřený v PowerPointu) zůstává nedotčen.
+- **Ověření Fáze 3 (Puppeteer + reálný Chrome + reálné API):** **12/12 asercí
+  OK, 0 neočekávaných chyb v konzoli** — auto-otevření wizardu při chybějícím
+  obsahu, odmítnutí ne-.pptx, upload → progress → needs_manual_pdf (PowerPoint
+  odmítl junk deck), návod na ruční export, ručně dodané PDF + „Zkontrolovat
+  znovu" → Done se souhrnem „selftest · 2 slajdy · 1 video (slajd 2)",
+  „Pokračovat" → reload → panel s názvem decku, confirm při přepisu, blokace
+  kláves pod wizardem, Esc→zpět na panel.

@@ -7,6 +7,7 @@ import { pdfjsVersion } from "./pdf.js";
 import { initSlides } from "./slides.js";
 import { initCaptions } from "./captions.js";
 import { initPanel } from "./panel.js";
+import { initWizard } from "./wizard.js";
 
 console.log("[townhall-titulky] pdf.js verze:", pdfjsVersion);
 
@@ -21,11 +22,31 @@ async function main() {
 
   const slides = await initSlides();
 
+  // Wizard nahrání prezentace; po zavření se vrací start panel.
+  const wizard = initWizard({ onClose: () => { if (panel) panel.show(); } });
+
   // Start panel (overlay): deck name + počet slajdů, kompat. varování, tlačítka.
-  panel = initPanel({ slides, captions });
+  panel = initPanel({
+    slides, captions,
+    onUpload: () => wizard.open(),
+  });
+
+  // Chybí/nekompletní obsah → místo start panelu rovnou wizard (drop zóna).
+  // Statický fallback server (serve.ps1) vrací pro /api/* 501 → wizard se
+  // neotvírá a panel zůstává (varování o obsahu ukazuje sám).
+  try {
+    const r = await fetch("api/content/status", { cache: "no-store" });
+    if (r.ok) {
+      const cs = await r.json();
+      if (!cs.hasPdf || !cs.hasConfig) {
+        panel.hide();
+        wizard.open({ skipConfirm: true });
+      }
+    }
+  } catch (e) { /* server bez API — panel zůstává */ }
 
   // Zpřístupníme pro ladění.
-  window.__townhall = { pdfjsVersion, slides, captions, panel };
+  window.__townhall = { pdfjsVersion, slides, captions, panel, wizard };
 }
 
 if (document.readyState === "loading") {
