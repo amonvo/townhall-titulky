@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Živé titulky — Townhall</title>
+  <link rel="stylesheet" href="app/app.css" />
+</head>
+<body>
+  <!-- Horní část: promítaný slide -->
+  <main id="stage" aria-label="Prezentace">
+    <canvas id="slide-canvas"></canvas>
+    <!-- Video overlay pro video-slajdy (Fáze 3) se vkládá sem za běhu -->
+    <div id="slide-counter" hidden>0 / 0</div>
+  </main>
+
+  <!-- Dolní pás: titulky (naplní Fáze 4) -->
+  <section id="captions" aria-label="Titulky">
+    <!-- Fáze 4 sem vloží jazykové řádky a status pills -->
+  </section>
+
+  <!-- Dočasný stavový řádek (Fáze 1): verze pdf.js. Fáze 3+ ho odstraní. -->
+  <div id="boot-status" role="status">načítám…</div>
+
+  <script type="module" src="app/app.js"></script>
+</body>
+</html>

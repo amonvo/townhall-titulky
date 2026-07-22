@@ -21,3 +21,22 @@ Zde jsou zaznamenaná rozhodnutí učiněná při nejasnostech (dle ground rule 
   Navíc přidán `.server.pid` (píše ho `start.bat` ve Fázi 5) — smetí, do gitu nepatří.
 - `docs/worklog/01-bootstrap.md` = doslovná kopie `1.md`.
 - README je zatím jen kostra (CZ), doplní se ve Fázi 5.
+
+## Fáze 1
+
+- Vendorováno `pdfjs-dist@4.10.38` (poslední stabilní 4.x): `pdf.min.mjs`,
+  `pdf.worker.min.mjs`, `LICENSE`. Ověřeno, že řetězec verze `4.10.38` je v obou
+  souborech. `vendor/pdfjs/README.md` popisuje původ a postup aktualizace.
+- `app.js` importuje `pdf.min.mjs`, nastaví `GlobalWorkerOptions.workerSrc` na
+  vendorovaný worker, vypíše verzi do konzole i do dočasného `#boot-status`.
+- **DŮLEŽITÉ ZJIŠTĚNÍ (řeší se ve Fázi 5):** Pythonův `http.server` servíruje
+  `.mjs` jako `text/plain`. Chrome kvůli *strict MIME checking* modul odmítne
+  (`Failed to load module script … MIME type of "text/plain"`). Celá appka jsou
+  ES moduly importující `.mjs`, takže **holý `python -m http.server` appku
+  nerozběhne**. Řešení: primární server bude `serve.ps1` (Fáze 5) se správnými MIME
+  typy (`.mjs` → `text/javascript`) a Range podporou; případný Python fallback musí
+  MIME pro `.mjs` opravit. Rozhodnutí o pořadí serverů viz poznámky k Fázi 5.
+- Ověření Fáze 1 (headless Chrome, server se správným `.mjs` MIME): DOM ukazuje
+  `pdf.js 4.10.38 ✓`, konzole obsahuje jediný řádek (log verze), **žádné chyby**.
+- `node --check` prošel na `app/app.js`, `app/slides.js`, `app/captions.js`
+  i na obou vendorovaných `.mjs`.

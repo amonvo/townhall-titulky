@@ -1,0 +1,7 @@
+# Vendorované artefakty pdf.js ukládej beze změn (žádná konverze konců řádků).
+vendor/pdfjs/pdf.min.mjs        -text
+vendor/pdfjs/pdf.worker.min.mjs -text
+
+# Windows launchery musí mít CRLF.
+*.bat text eol=crlf
+*.ps1 text eol=crlf

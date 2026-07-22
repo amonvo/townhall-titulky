@@ -1,0 +1,73 @@
+/* ===== Základ ===== */
+:root {
+  /* --scale ovlivňuje pouze velikost písma titulků (Fáze 4). */
+  --scale: 1;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0B0F14;
+  color: #F5F7FA;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Stage (horní 78vh) — Fáze 3 doplní kreslení ===== */
+#stage {
+  position: relative;
+  height: 78vh;
+  background: #0B0F14;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#slide-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, .55);
+}
+
+#slide-counter {
+  position: absolute;
+  right: 1.6vh;
+  bottom: 1.2vh;
+  font-size: 1.6vh;
+  color: rgba(245, 247, 250, .35);
+  user-select: none;
+  pointer-events: none;
+  transition: opacity .4s ease;
+}
+
+/* ===== Caption band (dolní 22vh) — Fáze 4 naplní ===== */
+#captions {
+  position: relative;
+  height: 22vh;
+  background: linear-gradient(180deg, #071426 0%, #04101E 100%);
+  border-top: 1px solid rgba(255, 255, 255, .07);
+}
+
+/* ===== Dočasný boot status (Fáze 1) ===== */
+#boot-status {
+  position: fixed;
+  left: 1.2vh;
+  bottom: 1.2vh;
+  font-size: 1.4vh;
+  color: rgba(245, 247, 250, .45);
+  background: rgba(16, 22, 31, .8);
+  border: 1px solid rgba(255, 255, 255, .07);
+  padding: .4em .8em;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  z-index: 50;
+}
