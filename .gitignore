@@ -1,0 +1,21 @@
+# Prompt / zadání soubory — nikdy se necommitují
+/1.md
+/[0-9]*.md
+
+# Runtime obsah prezentace (PPTX, PDF, videa — desítky až stovky MB)
+content/
+publish/
+
+# Node
+node_modules/
+
+# OS / editor smetí
+.DS_Store
+Thumbs.db
+*.log
+
+# Python
+__pycache__/
+
+# Server PID (píše ho start.bat)
+.server.pid
