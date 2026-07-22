@@ -1,4 +1,4 @@
-# tools/serve.ps1 — minimální statický souborový server (System.Net.HttpListener).
+﻿# tools/serve.ps1 — minimální statický souborový server (System.Net.HttpListener).
 #
 # Správné MIME typy (včetně .mjs → text/javascript, které Pythonův http.server
 # neumí) a podpora HTTP Range pro videa (Chrome je potřebuje k převíjení).
@@ -58,6 +58,19 @@ while ($listener.IsListening) {
     try {
         # URL cesta → lokální soubor (bez query, dekódovaná, bez traversalu).
         $rel = [System.Uri]::UnescapeDataString($req.Url.AbsolutePath)
+
+        # API neumíme (jen statický fallback server) → 501 s vysvětlením pro UI.
+        if ($rel -like "/api/*") {
+            $res.StatusCode = 501
+            $res.ContentType = "application/json; charset=utf-8"
+            $json = '{"error":"Příprava vyžaduje Python server (serve.py). Spusť start.bat na stroji s Pythonem, nebo připrav obsah ručně dle README."}'
+            $jbytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+            $res.ContentLength64 = $jbytes.Length
+            $res.OutputStream.Write($jbytes, 0, $jbytes.Length)
+            $res.Close()
+            continue
+        }
+
         if ($rel -eq "/" -or $rel -eq "") { $rel = "/index.html" }
         $rel = $rel.TrimStart("/")
         $full = Join-Path $root $rel
