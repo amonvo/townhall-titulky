@@ -46,7 +46,77 @@ body {
   color: rgba(245, 247, 250, .35);
   user-select: none;
   pointer-events: none;
+  font-variant-numeric: tabular-nums;
   transition: opacity .4s ease;
+  z-index: 20;
+}
+
+/* Prvky skrývané po 4 s nečinnosti (counter, Fáze 4 pills). */
+.ui-hidden {
+  opacity: 0 !important;
+}
+
+/* ===== Video overlay ===== */
+.video-wrap {
+  position: absolute;
+  z-index: 15;
+  display: none;
+}
+
+.slide-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, .55);
+  cursor: pointer;
+}
+
+.play-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 6vh;
+  height: 6vh;
+  border-radius: 50%;
+  border: none;
+  background: rgba(4, 10, 18, .62);
+  color: #F5F7FA;
+  font-size: 2.6vh;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding-left: .3vh; /* opticky vycentruje ▶ */
+  transition: opacity .25s ease, transform .1s ease;
+}
+
+.play-badge.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ===== Setup message (chybí obsah) ===== */
+#setup-message {
+  max-width: 60vh;
+  text-align: center;
+  font-size: 2.4vh;
+  line-height: 1.5;
+  color: #8B95A1;
+  padding: 4vh;
+}
+
+#setup-message code {
+  color: #FFD966;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: .9em;
+}
+
+#setup-message strong {
+  color: #F5F7FA;
+  font-size: 3vh;
 }
 
 /* ===== Caption band (dolní 22vh) — Fáze 4 naplní ===== */

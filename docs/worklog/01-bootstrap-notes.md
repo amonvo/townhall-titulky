@@ -63,3 +63,31 @@ Zde jsou zaznamenaná rozhodnutí učiněná při nejasnostech (dle ground rule 
   souboru, validní config.json. **Exit 0.**
 - `content/source.pptx` na tomto stroji **neexistuje** → prep proti reálnému decku
   neběžel (dle akceptace jen zaznamenat a pokračovat). Operátor ho spustí dle README.
+
+## Fáze 3 — slides.js
+
+- pdf.js setup vytažen do `app/pdf.js` (importují app.js i slides.js) → worker se
+  nastavuje na jednom místě, žádná cyklická závislost.
+- Render do `<canvas>` v rozlišení `devicePixelRatio`, fit-scale = `min` poměrů vůči
+  #stage, re-render na `resize`/`fullscreenchange` s debounce 150 ms. `renderToken`
+  ruší zastaralé async rendery (rychlé listování).
+- **Rozhodnutí (default):** „Preload next/prev offscreen" řešeno přednačtením
+  `getPage(n±1)` (dekódování), ne plným offscreen renderem do canvasu. pdf.js si
+  stránky cachuje, takže překreslení po navigaci je okamžité; plný offscreen render
+  by přidal složitost bez znatelného přínosu na 78vh ploše.
+- Video overlay: `<video>` v `.video-wrap` pokládán absolutně nad vykreslený
+  obdélník slajdu; pozice se počítá z `canvas.getBoundingClientRect()` vůči
+  `#stage` (letterbox korektní i po resize). `preload="auto"` jen pro aktuální
+  slajd, jinak `none`. Není `muted`. Play badge (▶) mizí při přehrávání. Opuštění
+  slajdu video pauzne (pozice zůstává) a skryje.
+- **Chyby nalezené a opravené při ověření (Puppeteer + reálný Chrome):**
+  1. `goTo(1)` na startu předčasně končil, protože default `canvas.width` (300) je
+     truthy → slajd 1 se nevykreslil. Oprava: `current` startuje na `0`, guard
+     zjednodušen na `clamped === current`.
+  2. `favicon.ico` → 404 v konzoli. Oprava: `<link rel="icon" href="data:,">`.
+- **Ověření Fáze 3 (Puppeteer, reálný Chrome, headless):** 3str. testovací PDF +
+  1 video entry (slide 2, x0.25/y0.25/w0.5/h0.5). Všech 13 asercí OK, **0 chyb
+  v konzoli**: counter 1/3, render canvasu, Šipky/Home/End, geometrie videa přesně
+  odpovídá zlomkům, repozice po resize, Space přehraje video a nemění counter,
+  opuštění slajdu skryje+pauzne video. Testovací PDF/video/config jsou v `content/`
+  (gitignored, necommitováno). Generátor PDF byl throwaway a byl smazán.
