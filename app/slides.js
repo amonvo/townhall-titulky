@@ -32,7 +32,7 @@ export function registerTransient(el) {
   if (el) transientEls.add(el);
 }
 
-function showTransient() {
+export function showTransient() {
   transientEls.forEach((el) => el.classList.remove("ui-hidden"));
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {

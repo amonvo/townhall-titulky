@@ -119,12 +119,119 @@ body {
   font-size: 3vh;
 }
 
-/* ===== Caption band (dolní 22vh) — Fáze 4 naplní ===== */
+/* ===== Caption band (dolní 22vh) ===== */
 #captions {
   position: relative;
   height: 22vh;
   background: linear-gradient(180deg, #071426 0%, #04101E 100%);
   border-top: 1px solid rgba(255, 255, 255, .07);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: .4vh;
+  padding: 0 4vw;
+  overflow: hidden;
+}
+
+/* Český mini-řádek (skrytý; přepíná 'C') */
+.cap-cz {
+  min-height: 0;
+}
+.cap-cz.hidden { display: none; }
+.cap-cz-text {
+  font-size: calc(2.2vh * var(--scale));
+  color: #6B7684;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Jazykové řádky EN / UK — stejná velikost */
+.cap-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 1.2vw;
+  align-items: baseline;
+}
+
+.cap-label {
+  grid-row: 1 / 3;
+  align-self: center;
+  font-size: 1.3vh;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #64707E;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cap-prev {
+  font-size: calc(2.6vh * var(--scale));
+  opacity: .55;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cap-curr {
+  font-size: calc(4.2vh * var(--scale));
+  font-weight: 600;
+  line-height: 1.12;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cap-en-color { color: #F5F7FA; }
+.cap-uk-color { color: #FFD966; }
+
+/* ===== Status pills (vpravo nahoře) ===== */
+#status-pills {
+  position: fixed;
+  top: 1.4vh;
+  right: 1.4vh;
+  display: flex;
+  gap: .8vh;
+  z-index: 40;
+  transition: opacity .4s ease;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .5em;
+  font-size: 1.4vh;
+  background: #10161F;
+  border: 1px solid #1E2833;
+  color: #8B95A1;
+  padding: .45em .8em;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.pill.ok  { color: #7DDBA3; }
+.pill.warn { color: #FFD966; }
+.pill.err { color: #FF8F7D; }
+
+.rec-dot {
+  width: .8em;
+  height: .8em;
+  border-radius: 50%;
+  background: #EE3024;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.rec-dot.listening {
+  opacity: 1;
+  animation: rec-pulse 2s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
 }
 
 /* ===== Dočasný boot status (Fáze 1) ===== */

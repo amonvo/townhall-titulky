@@ -91,3 +91,28 @@ Zde jsou zaznamenaná rozhodnutí učiněná při nejasnostech (dle ground rule 
   odpovídá zlomkům, repozice po resize, Space přehraje video a nemění counter,
   opuštění slajdu skryje+pauzne video. Testovací PDF/video/config jsou v `content/`
   (gitignored, necommitováno). Generátor PDF byl throwaway a byl smazán.
+
+## Fáze 4 — captions.js
+
+- Jádro engine převzato z prototypu (APPENDIX A) **beze změny logiky**: `cs-CZ`,
+  `continuous`, `interimResults`, auto-restart v `onend` (250 ms, při selhání
+  recreate recognizer), `not-allowed`/`service-not-allowed` → panel hláška.
+  Kaskáda `translate()`: Google `client=gtx` → LibreTranslate (`LIBRE_URL`, prázdný
+  default) → `null` (poslední záchrana: čeština s prefixem `· `). Fail-counter +
+  15 s cooldown zachován. Sekvenční ochrana `seq`/`shownSeq`/`finalSeq`,
+  `INTERIM_THROTTLE_MS=1200`. `CORRECTIONS` + `applyCorrections()` s Unicode
+  hranicemi. Wake lock + `visibilitychange` re-acquire.
+- Nová UI v pásu #captions: dva stejně velké řádky EN (#F5F7FA) a UK (#FFD966),
+  každý label + prev (2.6vh, 55 %) + curr (4.2vh, 600). Český mini-řádek skrytý,
+  přepíná `C`. `+`/`-` mění `--scale` (0.7–1.5), který škáluje jen písmo titulků.
+  Status pills vpravo nahoře (mikrofon/překlad) se stavy ok/warn/err + REC tečka
+  (#EE3024, 2 s pulse) při poslechu. Pills se přidávají do `registerTransient`
+  (mizí s counterem po 4 s), každá změna stavu volá `showTransient()` → objeví se.
+- **Rozhodnutí (default):** klávesy `+`/`-`/`C` řeší captions.js vlastním keydown
+  listenerem (disjunktní od kláves ve slides.js), moduly zůstávají nezávislé.
+  Mikrofon se NEspouští automaticky — spustí ho start panel (Fáze 5); `onMicDenied`
+  je zatím napojen na `console.warn`, panel ho převezme.
+- **Ověření Fáze 4 (Puppeteer, reálný Chrome):** 13/13 asercí OK, **0 chyb**:
+  pills ve výchozím stavu, EN/UK labely, český řádek skrytý → `C` přepíná, `+/-`
+  mění a klampuje `--scale` na 0.7–1.5, `start()` funguje a aplikace dál naviguje.
+  Reálný tok mikrofonu ověří operátor (sekce VERIFY).
