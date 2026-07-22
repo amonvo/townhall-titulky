@@ -279,7 +279,7 @@ export async function initSlides() {
   } catch (e) {
     console.warn("[slides] config.json se nepodařilo načíst:", e.message);
     showSetupMessage();
-    return { ok: false };
+    return { ok: false, config: null };
   }
 
   try {
@@ -287,7 +287,7 @@ export async function initSlides() {
   } catch (e) {
     console.warn("[slides] PDF se nepodařilo načíst:", e.message);
     showSetupMessage();
-    return { ok: false };
+    return { ok: false, config };
   }
 
   pageCount = pdfDoc.numPages;
@@ -303,6 +303,7 @@ export async function initSlides() {
 
   return {
     ok: true,
+    config,
     next, prev,
     goTo,
     getState: () => ({ current, pageCount, hasVideo: currentHasVideo() }),

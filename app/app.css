@@ -234,17 +234,117 @@ body {
   50% { opacity: .35; }
 }
 
-/* ===== Dočasný boot status (Fáze 1) ===== */
-#boot-status {
+/* ===== Start panel (overlay) ===== */
+#panel-overlay {
   position: fixed;
-  left: 1.2vh;
-  bottom: 1.2vh;
-  font-size: 1.4vh;
-  color: rgba(245, 247, 250, .45);
-  background: rgba(16, 22, 31, .8);
-  border: 1px solid rgba(255, 255, 255, .07);
-  padding: .4em .8em;
+  inset: 0;
+  z-index: 100;
+  background: rgba(4, 8, 14, .78);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#panel-overlay.hidden { display: none; }
+
+.panel-box {
+  background: #10161F;
+  border: 1px solid #1E2833;
+  border-radius: 12px;
+  padding: 4.5vh 5.5vh;
+  max-width: 78vh;
+  width: min(78vh, 92vw);
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .6);
+}
+
+.panel-title {
+  margin: 0 0 1vh;
+  font-size: 3.4vh;
+  font-weight: 600;
+  color: #F5F7FA;
+}
+
+.panel-sub {
+  font-size: 1.8vh;
+  color: #8B95A1;
+  margin-bottom: 2.6vh;
+}
+
+.panel-warn {
+  color: #FFD966;
+  font-size: 1.7vh;
+  line-height: 1.5;
+  margin: .6vh 0;
+}
+
+.panel-msg {
+  color: #FF8F7D;
+  font-size: 1.8vh;
+  line-height: 1.5;
+  margin: 1.2vh 0;
+}
+
+.panel-msg.hidden { display: none; }
+
+.panel-buttons {
+  display: flex;
+  gap: 1.6vh;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 2.6vh 0 3vh;
+}
+
+.panel-btn {
+  font-family: inherit;
+  font-size: 2vh;
+  font-weight: 600;
+  padding: 1.3vh 2.6vh;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background .15s ease, border-color .15s ease;
+}
+
+.panel-btn.primary {
+  background: #2F6FEB;
+  border-color: #2F6FEB;
+  color: #fff;
+}
+.panel-btn.primary:hover { background: #3D7BF0; }
+.panel-btn.primary:disabled {
+  background: #22304A;
+  border-color: #22304A;
+  color: #5A6577;
+  cursor: not-allowed;
+}
+
+.panel-btn.ghost {
+  background: transparent;
+  border: 1px solid #2A3644;
+  color: #F5F7FA;
+}
+.panel-btn.ghost:hover {
+  border-color: #3D4C5E;
+  background: rgba(255, 255, 255, .04);
+}
+
+.panel-legend {
+  font-size: 1.5vh;
+  color: #64707E;
+  border-top: 1px solid #1E2833;
+  padding-top: 2vh;
+  line-height: 2;
+}
+
+.panel-legend kbd {
+  font-family: inherit;
+  font-size: .95em;
+  color: #8B95A1;
+  background: #1A222D;
+  border: 1px solid #2A3644;
   border-radius: 4px;
-  font-variant-numeric: tabular-nums;
-  z-index: 50;
+  padding: .1em .5em;
+  margin: 0 .1em;
 }
