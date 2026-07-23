@@ -15,7 +15,35 @@ zdarma.
 - Python 3 (pro `tools/prep.py` a lokální server); bez Pythonu se server spustí
   přes PowerShell (`tools/serve.ps1`), ale `prep.py` Python potřebuje
 
-## Příprava před každým townhallem (krok za krokem)
+## Příprava prezentace
+
+**Hlavní cesta — vše v aplikaci, bez terminálu:**
+
+1. Spusť **`start.bat`** — nastartuje lokální server na `http://localhost:8137`
+   a otevře Chrome.
+2. Pokud obsah chybí, aplikace **sama nabídne nahrání**; jinak klikni na start
+   panelu na **„Nahrát novou prezentaci“**.
+3. **Přetáhni `.pptx` do okna** (nebo klikni a vyber soubor). Aplikace sama:
+   nahraje soubor → zanalyzuje prezentaci → vytáhne videa → **převede ji do
+   PDF** (přes lokálně nainstalovaný PowerPoint, u velkých prezentací to může
+   trvat i minutu) → připraví konfiguraci.
+4. Na závěr uvidíš souhrn (`32 slajdů · 4 videa`) → **`Pokračovat`** → start
+   panel s novou prezentací. Hotovo.
+
+> **Poznámka:** automatický převod do PDF vyžaduje **nainstalovaný PowerPoint**.
+> Bez něj aplikace připraví videa i konfiguraci a provede tě ručním exportem
+> (`Soubor → Uložit jako → PDF` → `content\slides.pdf` → „Zkontrolovat znovu“).
+
+> **Po aktualizaci aplikace (git pull)** restartuj server: `stop.bat` +
+> `start.bat` — běžící server jinak servíruje starý kód.
+
+Před akcí ještě: klikni na **„Spustit prezentaci s titulky“**, povol mikrofon
+a řekni zkušební větu — v dolním pásu se objeví anglický a ukrajinský překlad.
+Po akci server zastavíš přes **`stop.bat`**.
+
+### Pokročilá cesta (CLI)
+
+Ruční příprava přes terminál funguje dál:
 
 1. V PowerPointu: `Soubor → Uložit jako → PDF` → ulož jako `content/slides.pdf`.
 2. Původní prezentaci ulož jako `content/source.pptx`.
@@ -28,13 +56,6 @@ zdarma.
    Skript vypíše souhrn: počet slajdů, nalezená videa (slajd → soubor → pozice)
    a případná varování. Videa skončí v `content/videos/`, konfigurace
    v `content/config.json`.
-4. Spusť **`start.bat`** — nastartuje lokální server na `http://localhost:8137`
-   a otevře Chrome. V aplikaci klikni na **„Spustit prezentaci s titulky“**
-   a povol mikrofon.
-5. Řekni zkušební větu do mikrofonu — v dolním pásu se objeví anglický
-   a ukrajinský překlad.
-
-Po akci server zastavíš přes **`stop.bat`**.
 
 ## Ovládání
 
@@ -50,6 +71,18 @@ Po akci server zastavíš přes **`stop.bat`**.
 | `Esc` | otevřít start panel (mikrofon běží dál; lze titulky zastavit) |
 
 ## Řešení potíží
+
+**Nahrání prezentace hlásí chybu / „Příprava vyžaduje Python server“** —
+wizard potřebuje Python server (`tools/serve.py`), který `start.bat` spouští
+automaticky, když je Python nainstalovaný. Záložní PowerShell server
+(`serve.ps1`) je jen statický a přípravu neumí — na stroji bez Pythonu připrav
+obsah ručně (viz Pokročilá cesta). Pokud jsi právě aktualizoval aplikaci,
+restartuj server (`stop.bat` + `start.bat`).
+
+**Převod do PDF selhal (žlutá obrazovka)** — na stroji chybí PowerPoint, nebo
+soubor odmítl otevřít. Videa i konfigurace už jsou připravené; stačí PDF
+doplnit ručně: v PowerPointu `Soubor → Uložit jako → typ PDF` → ulož jako
+`content\slides.pdf` → v aplikaci „Zkontrolovat znovu“.
 
 **Mikrofon zamítnut** — Chrome ukáže ikonu zámku/kamery v adresním řádku.
 Klikni na ni → Mikrofon → Povolit, pak v panelu znovu „Spustit prezentaci
@@ -103,12 +136,15 @@ i ukrajinštiny.
 ## Struktura projektu
 
 ```
-index.html          aplikace (jedna stránka)
-app/                ES moduly: app.js, slides.js, captions.js, panel.js, pdf.js
-vendor/pdfjs/       vendorovaná pdf.js v4 (žádné CDN za běhu)
-tools/prep.py       extrakce videí z PPTX + generování content/config.json
-tools/serve.py      lokální server (Python, MIME + HTTP Range)
-tools/serve.ps1     lokální server (PowerShell fallback bez Pythonu)
-content/            slides.pdf, videos/, config.json — negitováno, plní prep.py
-start.bat/stop.bat  spuštění/zastavení serveru + otevření Chrome
+index.html            aplikace (jedna stránka)
+app/                  ES moduly: app.js, slides.js, captions.js, panel.js,
+                      wizard.js, pdf.js
+vendor/pdfjs/         vendorovaná pdf.js v4 (žádné CDN za běhu)
+tools/prep.py         extrakce videí z PPTX + generování content/config.json
+tools/serve.py        lokální server (Python, MIME + Range + API přípravy)
+tools/serve.ps1       lokální server (PowerShell fallback, jen statika)
+tools/export-pdf.ps1  PPTX → PDF přes PowerPoint (volá ho server)
+tools/test-api.py     testy API přípravy
+content/              slides.pdf, videos/, config.json — negitováno
+start.bat/stop.bat    spuštění/zastavení serveru + otevření Chrome
 ```

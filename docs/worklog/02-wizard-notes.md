@@ -119,3 +119,22 @@ Rozhodnutí při nejasnostech (ground rule 5: sensible default + poznámka, neza
   znovu" → Done se souhrnem „selftest · 2 slajdy · 1 video (slajd 2)",
   „Pokračovat" → reload → panel s názvem decku, confirm při přepisu, blokace
   kláves pod wizardem, Esc→zpět na panel.
+
+## Fáze 4 — docs + závěrečná baterie
+
+- README: nová sekce „Příprava prezentace" (wizard-first), CLI ponecháno jako
+  „Pokročilá cesta". Troubleshooting doplněn o 501/statický server, žlutou
+  needs_manual_pdf větev a **restart serveru po aktualizaci** (přímý důsledek
+  incidentu se stale serverem). Struktura projektu aktualizována
+  (wizard.js, export-pdf.ps1, test-api.py).
+- `start.bat`/`stop.bat` beze změn v promptu 2 — chování ověřeno v promptu 1;
+  server ze `start.bat` je `tools/serve.py`, tedy varianta s API.
+- Původní panel suite (verify-phase5) měla aserce natvrdo na 3stránkový
+  testovací deck; v `content/` je teď reálný 32stránkový deck operátora →
+  aserce přepsány deck-agnosticky (counter `1 / N` → `2 / N`, podtitulek
+  `deck · N slajdů`). Suite tím mimochodem proběhla nad reálným deckem.
+- **Závěrečná baterie (vše exit 0):** `node --check` všech 6 app modulů ·
+  `py -3 tools/prep.py --self-test` 12/12 · `py -3 tools/test-api.py` 21/21 ·
+  Puppeteer wizard suite 12/12 · Puppeteer panel suite 14/14 (reálný deck).
+  Testy běžely na izolovaných portech (8151–8153), operátorův server na 8137
+  nebyl dotčen.
