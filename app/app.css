@@ -293,6 +293,45 @@ body {
 
 .panel-msg.hidden { display: none; }
 
+/* Karty výběru režimu promítání */
+.mode-cards {
+  display: flex;
+  gap: 1.6vh;
+  margin: 2.2vh 0 .6vh;
+}
+
+.mode-card {
+  flex: 1 1 0;
+  font-family: inherit;
+  text-align: left;
+  background: #0B0F14;
+  border: 1px solid #1E2833;
+  border-radius: 10px;
+  padding: 1.8vh 2vh;
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.mode-card:hover { border-color: #2A3644; }
+
+.mode-card.selected {
+  border-color: #2F6FEB;
+  box-shadow: 0 0 0 1px #2F6FEB, 0 0 18px rgba(47, 111, 235, .18);
+}
+
+.mode-card-title {
+  font-size: 1.9vh;
+  font-weight: 600;
+  color: #F5F7FA;
+  margin-bottom: .6vh;
+}
+
+.mode-card-sub {
+  font-size: 1.5vh;
+  color: #8B95A1;
+  line-height: 1.45;
+}
+
 .panel-buttons {
   display: flex;
   gap: 1.6vh;

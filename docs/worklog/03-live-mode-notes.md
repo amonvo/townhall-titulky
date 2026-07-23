@@ -42,3 +42,21 @@ Rozhodnutí při nejasnostech (ground rule 4: sensible default + poznámka, neza
   zmenšení + žádný ellipsis + nic neuříznuto, reset velikosti další větou,
   `+`/`-` klamp 0.7–1.6. Pozn.: test musí nejdřív zavřít start panel (ten
   klávesy `+`/`-` blokuje capture handlerem — správné chování).
+
+## Fáze 2 — výběr režimu
+
+- Režim v `localStorage` klíč `townhall.mode` (`"live"` | `"pdf"`), default
+  `live`; čtení/zápis v try/catch (private mode). Export `getMode()`/`setMode()`
+  z panel.js — používá je i app.js (gating wizardu) a Fáze 3 (live.js).
+- Karty jsou `<button>` (přístupnost) nad tlačítky panelu; výběr = border
+  #2F6FEB + jemný glow.
+- **Rozhodnutí (default):** varování „Chybí obsah" na panelu se ukazuje jen
+  v PDF režimu — v živém zrcadlení žádný připravený obsah není potřeba, warning
+  by mátl. Stejně tak auto-otevření wizardu při chybějícím obsahu (app.js) je
+  gatované na PDF režim (spec: „If PDF mode is selected and content is missing,
+  keep the current wizard-first behavior" — a contrario live nic neotvírá).
+- Tlačítko „Nahrát novou prezentaci" jen při vybraném PDF režimu (dle spec).
+- **Ověření (Puppeteer): 11/11 asercí OK** — výchozí live, výběr klikem,
+  persistence přes reload, viditelnost wizard tlačítka podle režimu, PDF flow
+  beze změny, live+chybějící obsah → žádný wizard ani warning,
+  pdf+chybějící obsah → wizard-first.

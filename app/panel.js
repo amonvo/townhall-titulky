@@ -17,11 +17,28 @@ const APP_KEYS = new Set([
   "f", "F", "+", "=", "-", "_", "c", "C",
 ]);
 
-let overlayEl, subEl, warnsEl, msgEl, buttonsEl;
+let overlayEl, subEl, warnsEl, msgEl, buttonsEl, cardsEl;
 let slidesApi = null;
 let captionsApi = null;
 let onUpload = null;    // otevře wizard nahrání prezentace (napojuje app.js)
+let onModeChange = null;
 let visible = false;
+
+/* ---------- režim promítání (localStorage) ---------- */
+
+const MODE_KEY = "townhall.mode";
+
+// "live" = Živý PowerPoint (getDisplayMedia zrcadlení), "pdf" = PDF režim.
+export function getMode() {
+  let v = null;
+  try { v = localStorage.getItem(MODE_KEY); } catch (e) { /* private mode */ }
+  return v === "pdf" ? "pdf" : "live"; // default: Živý PowerPoint
+}
+
+export function setMode(mode) {
+  try { localStorage.setItem(MODE_KEY, mode); } catch (e) { /* private mode */ }
+  if (typeof onModeChange === "function") onModeChange(mode);
+}
 
 function czPluralSlides(n) {
   if (n === 1) return "1 slajd";
@@ -62,6 +79,44 @@ function buildPanel() {
   warnsEl = document.createElement("div");
   warnsEl.className = "panel-warns";
 
+  // Výběr režimu: dvě karty nad tlačítky.
+  cardsEl = document.createElement("div");
+  cardsEl.className = "mode-cards";
+  const cardDefs = [
+    {
+      mode: "live",
+      title: "Živý PowerPoint (doporučeno)",
+      sub: "Zrcadlí běžící prezentaci — animace, videa i přechody. " +
+        "Vyžaduje notebook + projektor (rozšířená plocha).",
+    },
+    {
+      mode: "pdf",
+      title: "PDF režim",
+      sub: "Promítá připravené PDF. Pro jedinou obrazovku nebo jako záloha.",
+    },
+  ];
+  cardDefs.forEach((def) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "mode-card";
+    card.dataset.mode = def.mode;
+    const t = document.createElement("div");
+    t.className = "mode-card-title";
+    t.textContent = def.title;
+    const s = document.createElement("div");
+    s.className = "mode-card-sub";
+    s.textContent = def.sub;
+    card.appendChild(t);
+    card.appendChild(s);
+    card.addEventListener("click", () => {
+      setMode(def.mode);
+      refreshCards();
+      refreshWarnings();
+      refreshButtons();
+    });
+    cardsEl.appendChild(card);
+  });
+
   msgEl = document.createElement("div");
   msgEl.className = "panel-msg hidden";
 
@@ -79,6 +134,7 @@ function buildPanel() {
   box.appendChild(title);
   box.appendChild(subEl);
   box.appendChild(warnsEl);
+  box.appendChild(cardsEl);
   box.appendChild(msgEl);
   box.appendChild(buttonsEl);
   box.appendChild(legend);
@@ -107,6 +163,14 @@ function refreshSubtitle() {
   }
 }
 
+function refreshCards() {
+  if (!cardsEl) return;
+  const mode = getMode();
+  [...cardsEl.children].forEach((card) => {
+    card.classList.toggle("selected", card.dataset.mode === mode);
+  });
+}
+
 function refreshWarnings() {
   warnsEl.textContent = "";
   if (!isLikelyChrome() || !isSpeechSupported()) {
@@ -115,8 +179,9 @@ function refreshWarnings() {
   if (location.protocol === "file:") {
     addWarn("Aplikace běží ze souboru (file://) — spusť ji přes start.bat, jinak nepůjde načíst obsah ani mikrofon.");
   }
-  if (!slidesApi || !slidesApi.ok) {
-    addWarn("Chybí obsah — spusť tools/prep.py a vlož content/slides.pdf (viz README).");
+  // Chybějící obsah je problém jen v PDF režimu — živé zrcadlení ho nepotřebuje.
+  if (getMode() === "pdf" && (!slidesApi || !slidesApi.ok)) {
+    addWarn("Chybí obsah — nahraj prezentaci průvodcem, nebo spusť tools/prep.py (viz README).");
   }
 }
 
@@ -140,7 +205,8 @@ function refreshButtons() {
     if (!isSpeechSupported()) startBtn.disabled = true;
     buttonsEl.appendChild(startBtn);
     buttonsEl.appendChild(makeButton("Jen prezentace (bez titulků)", "ghost", () => hide()));
-    if (typeof onUpload === "function") {
+    // Nahrání prezentace má smysl jen v PDF režimu — capture nic nepřipravuje.
+    if (typeof onUpload === "function" && getMode() === "pdf") {
       buttonsEl.appendChild(makeButton("Nahrát novou prezentaci", "ghost", () => {
         hide();
         onUpload();
@@ -154,6 +220,7 @@ function refreshButtons() {
 function show() {
   refreshSubtitle();
   refreshWarnings();
+  refreshCards();
   refreshButtons();
   overlayEl.classList.remove("hidden");
   visible = true;
@@ -204,9 +271,10 @@ export function initPanel(opts) {
   slidesApi = opts.slides || null;
   captionsApi = opts.captions;
   onUpload = opts.onUpload || null;
+  onModeChange = opts.onModeChange || null;
   buildPanel();
   window.addEventListener("keydown", onKeyCapture, true);
   window.addEventListener("keydown", onKeyOpen);
   show();
-  return { show, hide, showMessage, isVisible: () => visible };
+  return { show, hide, showMessage, isVisible: () => visible, getMode };
 }

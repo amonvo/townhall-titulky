@@ -6,7 +6,7 @@
 import { pdfjsVersion } from "./pdf.js";
 import { initSlides } from "./slides.js";
 import { initCaptions } from "./captions.js";
-import { initPanel } from "./panel.js";
+import { initPanel, getMode } from "./panel.js";
 import { initWizard } from "./wizard.js";
 
 console.log("[townhall-titulky] pdf.js verze:", pdfjsVersion);
@@ -32,18 +32,21 @@ async function main() {
   });
 
   // Chybí/nekompletní obsah → místo start panelu rovnou wizard (drop zóna).
+  // Jen v PDF režimu — živé zrcadlení žádný připravený obsah nepotřebuje.
   // Statický fallback server (serve.ps1) vrací pro /api/* 501 → wizard se
   // neotvírá a panel zůstává (varování o obsahu ukazuje sám).
-  try {
-    const r = await fetch("api/content/status", { cache: "no-store" });
-    if (r.ok) {
-      const cs = await r.json();
-      if (!cs.hasPdf || !cs.hasConfig) {
-        panel.hide();
-        wizard.open({ skipConfirm: true });
+  if (getMode() === "pdf") {
+    try {
+      const r = await fetch("api/content/status", { cache: "no-store" });
+      if (r.ok) {
+        const cs = await r.json();
+        if (!cs.hasPdf || !cs.hasConfig) {
+          panel.hide();
+          wizard.open({ skipConfirm: true });
+        }
       }
-    }
-  } catch (e) { /* server bez API — panel zůstává */ }
+    } catch (e) { /* server bez API — panel zůstává */ }
+  }
 
   // Zpřístupníme pro ladění.
   window.__townhall = { pdfjsVersion, slides, captions, panel, wizard };
