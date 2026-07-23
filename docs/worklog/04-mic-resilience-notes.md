@@ -72,3 +72,15 @@ Rozhodnutí při nejasnostech (ground rule 4: sensible default + poznámka, neza
   — tlačítko, otevření (meter+verdikt), zastavení titulků během testu, label
   fake zařízení, všechny 4 verdikty, surová data, cleanup bez živých tracků,
   obnova titulků a návrat panelu.
+
+## Fáze 3 — guidance + docs
+
+- Guidance Živého PowerPointu: přidán žlutý varovný odstavec o viditelnosti
+  okna aplikace (minimalizace/úplné překrytí → Chrome pozastaví rozpoznávání).
+- README: totéž varování v setup sekci capture režimu; troubleshooting vede
+  novým postupem „Titulky se pořád restartují" (1. diagnostika, 2. viditelnost
+  okna, 3. síť/VPN) + tabulka všech stavů pilulky „mikrofon" s významy.
+- **Závěrečná baterie (vše exit 0):** `node --check` 8 modulů · prep
+  self-test 19/19 · test-api 21/21 · Puppeteer: panel 14/14, wizard 12/12,
+  captions 16/16, modes 11/11, live 14/14, pdfmode 14/14, miclife 14/14,
+  micdiag 16/16. Izolované porty; operátorův server a content/ nedotčeny.

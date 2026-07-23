@@ -29,6 +29,10 @@ zdarma.
    Okno nechej otevřené — klidně schované za aplikací, jen ho **neminimalizuj**
    (minimalizované okno se může přestat překreslovat).
 
+> **Důležité pro titulky:** okno **této aplikace** nech viditelné (na
+> projektoru). Nesmí být minimalizované ani úplně překryté — Chrome by
+> pozastavil rozpoznávání řeči a titulky by se přestaly obnovovat.
+
 ## Požadavky
 
 - Windows 10/11
@@ -103,6 +107,26 @@ myš); klávesy níže označené „PDF“ v něm nic nedělají a aplikace to 
 | `Esc` | otevřít start panel (mikrofon běží dál; lze titulky zastavit) | oba |
 
 ## Řešení potíží
+
+**Titulky se pořád restartují / neběží** — postupuj takto:
+
+1. Start panel (`Esc`) → **`Diagnostika mikrofonu`** → mluv ~8 s → verdikt
+   řekne, jestli je problém ve zvuku, v síti, nebo v oprávnění.
+2. Okno aplikace nesmí být **minimalizované ani úplně překryté** — Chrome
+   skrytým stránkám pozastavuje rozpoznávání (typicky při Živém PowerPointu
+   přes celou obrazovku na jednom monitoru).
+3. Rozpoznávání běží přes servery Googlu — **VPN/firewall** je může blokovat.
+
+Stavy pilulky „mikrofon“ a jejich význam:
+
+| Pilulka | Význam |
+| --- | --- |
+| `poslouchám` (zeleně) | vše v pořádku; svítí i během normálních pauz v řeči |
+| `síť rozpoznávání nedostupná — zkouším dál` | speech servery nedostupné — síť/VPN/firewall; obnoví se samo |
+| `mikrofon nenalezen / nedává zvuk` | Chrome nedostává audio — zkontroluj vstup ve Windows |
+| `rozpoznávání přerušováno — okno nesmí být skryté` | okno aplikace je minimalizované/překryté |
+| `restartuji… (…)` | opakované restarty z uvedeného důvodu; v závorce chybový kód |
+| `přístup zamítnut` | povol mikrofon v liště adresy a spusť znovu |
 
 **„Sdílení okna skončilo“ (Živý PowerPoint)** — zavřel se prezentační režim
 PowerPointu, nebo bylo sdílení zastaveno (lišta Chromu „Zastavit sdílení“).

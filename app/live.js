@@ -101,6 +101,9 @@ function showGuidance(errorMsg) {
         "Okno nechej otevřené (klidně za touto aplikací), jen ho neminimalizuj.",
     ].forEach((t) => steps.appendChild(el("li", null, t)));
     root.appendChild(steps);
+    root.appendChild(el("p", "live-visibility-warn",
+      "Okno této aplikace nech viditelné (na projektoru). Nesmí být " +
+      "minimalizované ani úplně překryté — Chrome by pozastavil rozpoznávání řeči."));
 
     const err = el("div", "wizard-error", errorMsg || "");
     if (!errorMsg) err.classList.add("hidden");
