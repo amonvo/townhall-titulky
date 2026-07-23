@@ -43,9 +43,12 @@ function applyCorrections(text) {
 
 /* ===================== STAV ===================== */
 
+// prev = historie (malý řádek, poslední dokončená věta), curr = primární řádek
+// (velký; drží interim i poslední final — nikdy se záměrně nemaže),
+// lastFinal = text posledního zobrazeného finalu (posouvá se do historie).
 const TARGETS = [
-  { code: "en", prev: null, curr: null, seq: 0, shownSeq: 0, finalSeq: 0 },
-  { code: "uk", prev: null, curr: null, seq: 0, shownSeq: 0, finalSeq: 0 },
+  { code: "en", prev: null, curr: null, lastFinal: null, seq: 0, shownSeq: 0, finalSeq: 0 },
+  { code: "uk", prev: null, curr: null, lastFinal: null, seq: 0, shownSeq: 0, finalSeq: 0 },
 ];
 
 let czCurr = null;          // element pro aktuální český (mini-řádek)
@@ -120,15 +123,57 @@ function translate(text, tl) {
 
 /* ===================== ZOBRAZENÍ (sekvenční ochrana pořadí) ===================== */
 
+// Auto-fit primárního řádku: max 2 řádky, ellipsis zakázán. Po každé změně
+// textu se zkusí plná velikost a při přetečení (vlastního 2řádkového boxu,
+// NEBO celého pásu #captions) se krokuje dolů. Levné měření scrollHeight —
+// běží jen při změně textu / měřítka, žádné per-frame smyčky.
+const PRIMARY_SIZES = [5.4, 4.8, 4.3, 3.9]; // vh
+
+// Tolerance měření: line-height 1.18 je menší než přirozená výška Segoe UI,
+// takže inkoust glyfů přesahuje line-box a scrollHeight je trvale o ~2-3 px
+// nad clientHeight i bez přetečení. Skutečné přetečení o řádek je ≥ ~35 px.
+const FIT_EPSILON_PX = 6;
+
+function fitPrimary(t) {
+  if (!t.curr) return;
+  const band = document.getElementById("captions");
+  for (let i = 0; i < PRIMARY_SIZES.length; i++) {
+    t.curr.style.fontSize = "calc(" + PRIMARY_SIZES[i] + "vh * var(--scale))";
+    const overflowSelf = t.curr.scrollHeight > t.curr.clientHeight + FIT_EPSILON_PX;
+    const overflowBand = band && band.scrollHeight > band.clientHeight + FIT_EPSILON_PX;
+    if (!overflowSelf && !overflowBand) return;
+  }
+}
+
+function setPrimaryText(t, text) {
+  t.curr.textContent = text;
+  fitPrimary(t);
+}
+
+// Final: zapíše se do primárního řádku (zůstává tam do další věty);
+// předchozí zobrazený final se posune do historie. Guardy seq beze změny.
+function applyFinalDisplay(t, s, tr, czText) {
+  if (s < t.finalSeq) return;
+  t.finalSeq = s;
+  const text = (tr !== null && tr !== undefined) ? tr : "· " + czText;
+  if (t.lastFinal) t.prev.textContent = t.lastFinal;
+  t.lastFinal = text;
+  if (t.shownSeq <= s) { setPrimaryText(t, text); t.shownSeq = s; }
+}
+
+function applyInterimDisplay(t, s, tr) {
+  if (tr === null || tr === undefined) return;
+  if (s <= t.shownSeq || s < t.finalSeq) return;
+  t.shownSeq = s;
+  setPrimaryText(t, tr);
+}
+
 function handleFinal(czText) {
   if (czCurr) czCurr.textContent = czText;
   TARGETS.forEach(function (t) {
     const s = ++t.seq;
     translate(czText, t.code).then(function (tr) {
-      if (s < t.finalSeq) return;
-      t.finalSeq = s;
-      t.prev.textContent = (tr !== null) ? tr : "· " + czText;
-      if (t.shownSeq <= s) { t.curr.textContent = ""; t.shownSeq = s; }
+      applyFinalDisplay(t, s, tr, czText);
     });
   });
 }
@@ -142,9 +187,7 @@ function handleInterim(czText) {
     const s = ++t.seq;
     translate(czText, t.code).then(function (tr) {
       if (tr === null) return;
-      if (s <= t.shownSeq || s < t.finalSeq) return;
-      t.shownSeq = s;
-      t.curr.textContent = tr;
+      applyInterimDisplay(t, s, tr);
     });
   });
 }
@@ -312,8 +355,10 @@ function buildCaptionUI() {
 
 let scale = 1;
 function adjustScale(delta) {
-  scale = Math.max(0.7, Math.min(1.5, Math.round((scale + delta) * 10) / 10));
+  scale = Math.max(0.7, Math.min(1.6, Math.round((scale + delta) * 10) / 10));
   document.documentElement.style.setProperty("--scale", String(scale));
+  // Změna měřítka mění 2řádkový box → přeměř auto-fit obou jazyků.
+  TARGETS.forEach(fitPrimary);
 }
 
 let czVisible = false;
@@ -375,6 +420,28 @@ export function initCaptions(opts) {
   window.addEventListener("keydown", onKeyDown);
   setMic("vypnuto");
   setTr("—");
+
+  // Testovací šev (?test=1): řídí zobrazovací vrstvu přímo, bez mikrofonu
+  // a bez sítě — sekvenční guardy jdou stejnou cestou jako ostrý provoz.
+  if (/[?&]test=1/.test(location.search)) {
+    window.__captionsTest = {
+      final: function (cz, translations) {
+        if (czCurr) czCurr.textContent = cz;
+        TARGETS.forEach(function (t) {
+          const s = ++t.seq;
+          applyFinalDisplay(t, s, translations ? translations[t.code] : null, cz);
+        });
+      },
+      interim: function (cz, translations) {
+        if (czCurr) czCurr.textContent = cz;
+        TARGETS.forEach(function (t) {
+          const s = ++t.seq;
+          applyInterimDisplay(t, s, translations ? translations[t.code] : null);
+        });
+      },
+    };
+  }
+
   return {
     start: startCaptions,
     stop: stopCaptions,

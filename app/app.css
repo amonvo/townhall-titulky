@@ -167,23 +167,28 @@ body {
   white-space: nowrap;
 }
 
+/* Historie: poslední dokončená věta — jeden řádek, ellipsis povolen. */
 .cap-prev {
-  font-size: calc(2.6vh * var(--scale));
-  opacity: .55;
+  font-size: calc(2.8vh * var(--scale));
+  opacity: .5;
   line-height: 1.1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Primární řádek: interim i poslední final. Max 2 řádky (2 × lh 1.18),
+   NIKDY ellipsis — při přetečení JS auto-fit krokuje font-size dolů
+   (inline style; 5.4 → 4.8 → 4.3 → 3.9vh). */
 .cap-curr {
-  font-size: calc(4.2vh * var(--scale));
+  font-size: calc(5.4vh * var(--scale));
   font-weight: 600;
-  line-height: 1.12;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, .6);
-  white-space: nowrap;
+  line-height: 1.18;
+  max-height: 2.4em;
   overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .6);
 }
 
 .cap-en-color { color: #F5F7FA; }
