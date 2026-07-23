@@ -5,6 +5,30 @@ nimi zobrazuje **živé titulky** překládané z češtiny do angličtiny a ukr
 Vše běží lokálně v Google Chrome na Windows notebooku — bez API klíčů, bez účtů,
 zdarma.
 
+## Dva režimy promítání
+
+| | **Živý PowerPoint (doporučeno)** | **PDF režim (záloha)** |
+| --- | --- | --- |
+| Co promítá | zrcadlí běžící PowerPoint okno | připravené PDF |
+| Animace, přechody, GIFy | ✅ vše, 100% věrnost | GIFy přes overlay, jinak statické |
+| Videa | ✅ přímo v PowerPointu, se zvukem | přehrává je aplikace (overlay) |
+| Klikátko | ovládá **PowerPoint** (okno musí mít fokus) | ovládá aplikaci |
+| Příprava obsahu | žádná | nahrání `.pptx` průvodcem |
+| Kdy použít | townhall s projektorem (rozšířená plocha) | jediná obrazovka, nebo když capture selže |
+
+**Nastavení Živého PowerPointu (krok za krokem):**
+
+1. `Win+P` → **Rozšířit** (projektor jako druhá obrazovka).
+2. V PowerPointu: karta **Prezentace → Nastavit prezentaci → „Procházení
+   jednotlivcem (okno)“** → OK → Spustit prezentaci — poběží v okně.
+3. `start.bat` → v aplikaci nech vybraný **Živý PowerPoint** → `Spustit
+   prezentaci s titulky` → **`Vybrat okno PowerPointu`** → v dialogu Chromu
+   zvol okno s prezentací.
+4. Okno Chromu přesuň na projektor a stiskni `F` (fullscreen).
+5. Prezentaci ovládej klikáním / klikátkem **přímo v okně PowerPointu**.
+   Okno nechej otevřené — klidně schované za aplikací, jen ho **neminimalizuj**
+   (minimalizované okno se může přestat překreslovat).
+
 ## Požadavky
 
 - Windows 10/11
@@ -15,7 +39,9 @@ zdarma.
 - Python 3 (pro `tools/prep.py` a lokální server); bez Pythonu se server spustí
   přes PowerShell (`tools/serve.ps1`), ale `prep.py` Python potřebuje
 
-## Příprava prezentace
+## Příprava prezentace (PDF režim)
+
+Živý PowerPoint žádnou přípravu nepotřebuje. PDF režim (záloha) ano:
 
 **Hlavní cesta — vše v aplikaci, bez terminálu:**
 
@@ -59,18 +85,36 @@ Ruční příprava přes terminál funguje dál:
 
 ## Ovládání
 
-| Klávesa | Akce |
-| --- | --- |
-| `→` `↓` `PageDown` | další slajd (funguje s klikátkem) |
-| `←` `↑` `PageUp` | předchozí slajd |
-| `Home` / `End` | první / poslední slajd |
-| `Mezerník` | na slajdu s videem: přehrát/pauza; jinak další slajd |
-| `F` | fullscreen zap/vyp |
-| `+` / `−` | zvětšit / zmenšit písmo titulků (0.7×–1.5×) |
-| `C` | zobrazit/skrýt český řádek nad titulky |
-| `Esc` | otevřít start panel (mikrofon běží dál; lze titulky zastavit) |
+V **Živém PowerPointu** ovládáš prezentaci přímo v okně PowerPointu (klikátko,
+myš); klávesy níže označené „PDF“ v něm nic nedělají a aplikace to připomene.
+
+| Ovládání | Akce | Režim |
+| --- | --- | --- |
+| `→` `↓` `PageDown` | další slajd (funguje s klikátkem) | PDF |
+| `←` `↑` `PageUp` | předchozí slajd | PDF |
+| `Home` / `End` | první / poslední slajd | PDF |
+| **klik na slajd** | další slajd | PDF |
+| **klik u levého okraje** (12 % šířky) | předchozí slajd | PDF |
+| **kolečko myši** dolů/nahoru | další / předchozí (max 1 krok za 0,3 s) | PDF |
+| `Mezerník` | na slajdu s videem: přehrát/pauza; jinak další slajd | PDF |
+| `F` | fullscreen zap/vyp | oba |
+| `+` / `−` | zvětšit / zmenšit písmo titulků (0.7×–1.6×) | oba |
+| `C` | zobrazit/skrýt český řádek nad titulky | oba |
+| `Esc` | otevřít start panel (mikrofon běží dál; lze titulky zastavit) | oba |
 
 ## Řešení potíží
+
+**„Sdílení okna skončilo“ (Živý PowerPoint)** — zavřel se prezentační režim
+PowerPointu, nebo bylo sdílení zastaveno (lišta Chromu „Zastavit sdílení“).
+Spusť prezentaci v PowerPointu znovu a klikni na `Znovu vybrat okno`.
+
+**Černý/zamrzlý obraz v Živém PowerPointu** — okno PowerPointu je nejspíš
+**minimalizované**; Windows ho pak nepřekresluje. Obnov ho (stačí za oknem
+aplikace, překrytí nevadí). Pomáhá i vypnout spořič/zámek obrazovky.
+
+**PDF má okraje kolem slajdů (žlutý proužek v aplikaci)** — PDF vzniklo tiskem
+(tiskárna přidává okraje papíru). Vytvoř ho znovu průvodcem (automatický
+export), nebo v PowerPointu přes `Soubor → Uložit jako → typ PDF`.
 
 **Nahrání prezentace hlásí chybu / „Příprava vyžaduje Python server“** —
 wizard potřebuje Python server (`tools/serve.py`), který `start.bat` spouští
@@ -138,9 +182,9 @@ i ukrajinštiny.
 ```
 index.html            aplikace (jedna stránka)
 app/                  ES moduly: app.js, slides.js, captions.js, panel.js,
-                      wizard.js, pdf.js
+                      wizard.js, live.js, pdf.js
 vendor/pdfjs/         vendorovaná pdf.js v4 (žádné CDN za běhu)
-tools/prep.py         extrakce videí z PPTX + generování content/config.json
+tools/prep.py         extrakce videí a GIFů z PPTX + content/config.json (v2)
 tools/serve.py        lokální server (Python, MIME + Range + API přípravy)
 tools/serve.ps1       lokální server (PowerShell fallback, jen statika)
 tools/export-pdf.ps1  PPTX → PDF přes PowerPoint (volá ho server)

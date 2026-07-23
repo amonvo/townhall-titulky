@@ -124,3 +124,23 @@ Rozhodnutí při nejasnostech (ground rule 4: sensible default + poznámka, neza
   klik vpravo/levá zóna, kolečko s throttlem, žádný banner u 16:9 fixture,
   banner u A4 fixture + zavření. Self-test prep.py rozšířen na **19/19**
   (config v2, gif extrakce, slideAspect, legacy klíč).
+
+## Fáze 5 — docs + baterie
+
+- README: sekce „Dva režimy promítání" (srovnávací tabulka + setup Živého
+  PowerPointu vč. Win+P → Rozšířit, přesun Chromu na projektor, F,
+  neminimalizovat okno), quick-start vede Živým PowerPointem, příprava obsahu
+  označena jako PDF-only. Tabulka ovládání doplněna o klik zóny a kolečko
+  se sloupcem režimů; troubleshooting: sdílení skončilo, černý obraz
+  (minimalizace), okraje v PDF.
+- **Regrese chycená baterií:** starší suity (panel, wizard) předpokládaly PDF
+  chování, ale nový default režim je „live" — panel suite padala na navigaci
+  (guidance overlay blokuje šipky) a wizard se bez PDF režimu auto-neotvírá.
+  Suity dostaly preset `localStorage townhall.mode=pdf` (testují PDF flow;
+  live flow má vlastní suite). Aplikační chování je záměrné, ne chyba.
+- **Závěrečná baterie (vše exit 0):** `node --check` 7 modulů ·
+  prep self-test **19/19** · test-api **21/21** · Puppeteer: panel 14/14,
+  wizard 12/12, captions 16/16, modes 11/11, live 14/14, pdfmode 14/14.
+  Testy opět na izolovaném portu 8153; operátorův server na 8137 nedotčen
+  (pozn.: po git pull je potřeba `stop.bat` + `start.bat`, jinak poběží
+  kód bez live režimu — je v README).
