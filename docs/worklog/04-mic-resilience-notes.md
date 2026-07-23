@@ -47,3 +47,28 @@ Rozhodnutí při nejasnostech (ground rule 4: sensible default + poznámka, neza
   poslouchám bez flickeru při tichu (3×), růst backoffu 500→1000→2000, reset
   výsledkem, eskalace po 3 neproduktivních koncích („bez odezvy"), network/
   audio-capture/aborted hlášky, stop → vypnuto + čistá počítadla, [mic] logy.
+
+## Fáze 2 — diagnostika mikrofonu (app/micdiag.js)
+
+- ~8 s self-test: getUserMedia (label zařízení) + WebAudio AnalyserNode level
+  meter (peak z time-domain dat, ~15×/s, práh „mrtvého" vstupu 0.02) souběžně
+  se sondou SpeechRecognition (cs-CZ, interim; ticho ji ukončuje → onend ji
+  drží při životě po dobu měření).
+- Verdikty dle spec (ok/err), plus **rozhodnutí (default):** úroveň OK + žádné
+  výsledky + žádné network chyby → také síťový verdikt (nejpravděpodobnější
+  příčina; surový řádek ukáže skutečné kódy pro vzdálenou podporu). Surová
+  data: `zařízení · max úroveň · SR: N výsledků · chyby: …`.
+- Meter běží i po verdiktu až do zavření (operátor vidí živou úroveň);
+  `finalize()` si před verdiktem vezme poslední vzorek (determinismus).
+- „Zavřít": interval/timeout pryč, sonda stop, tracky stop, AudioContext
+  close. Titulky běžící před otevřením se zastaví a po zavření obnoví
+  (`wasRunning`), aby se sonda a ostrý engine nepraly o rozpoznávání.
+- Tlačítko `Diagnostika mikrofonu` (ghost) na panelu v obou režimech i obou
+  stavech (idle/running) — pod hlavními tlačítky.
+- Test seam `?test=1`: `__micDiagTest.useMockRecognizer/setLevel/forceDeny/
+  finish/state`. Poučka z testu: fake audio device Chromu generuje tón, takže
+  fake level pro „mrtvý vstup" verdikt je nutné nastavit PŘED open().
+- **Ověření (Puppeteer, fake-device flags): 16/16 asercí OK, 0 chyb v konzoli**
+  — tlačítko, otevření (meter+verdikt), zastavení titulků během testu, label
+  fake zařízení, všechny 4 verdikty, surová data, cleanup bez živých tracků,
+  obnova titulků a návrat panelu.

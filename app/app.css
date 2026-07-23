@@ -534,6 +534,78 @@ body.live-active .gif-wrap { display: none !important; }
   pointer-events: none;
 }
 
+/* ===== Diagnostika mikrofonu ===== */
+#micdiag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 115;
+  background: rgba(4, 8, 14, .82);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#micdiag-overlay.hidden { display: none; }
+
+.diag-device {
+  font-size: 1.6vh;
+  color: #8B95A1;
+  margin-bottom: 1.6vh;
+}
+
+.diag-instruction {
+  font-size: 2vh;
+  color: #F5F7FA;
+  margin: 0 0 1.4vh;
+}
+
+.diag-meter {
+  height: 3vh;
+  max-width: 64vh;
+  margin: 0 auto;
+  background: #0B0F14;
+  border: 1px solid #1E2833;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.diag-meter-bar {
+  height: 100%;
+  width: 0%;
+  background: #7DDBA3;
+  border-radius: 999px;
+  transition: width 60ms linear;
+}
+
+.diag-meter-bar.hot { background: #FFD966; }
+
+.diag-max {
+  font-size: 1.5vh;
+  color: #64707E;
+  margin: 1vh 0 2vh;
+  font-variant-numeric: tabular-nums;
+}
+
+.diag-verdict {
+  font-size: 2.6vh;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #8B95A1;
+  margin: 1.4vh 0;
+}
+
+.diag-verdict.ok  { color: #7DDBA3; }
+.diag-verdict.err { color: #FF8F7D; }
+
+.diag-raw {
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 1.4vh;
+  color: #64707E;
+  margin: 1.2vh 0 .6vh;
+  word-break: break-word;
+}
+
 /* ===== Wizard nahrání prezentace ===== */
 #wizard-overlay {
   position: fixed;

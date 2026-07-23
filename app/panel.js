@@ -22,6 +22,7 @@ let slidesApi = null;
 let captionsApi = null;
 let onUpload = null;    // otevře wizard nahrání prezentace (napojuje app.js)
 let onStartLive = null; // spustí flow živého zrcadlení (napojuje app.js)
+let onMicDiag = null;   // otevře diagnostiku mikrofonu (napojuje app.js)
 let onModeChange = null;
 let visible = false;
 
@@ -186,6 +187,16 @@ function refreshWarnings() {
   }
 }
 
+function appendMicDiagButton() {
+  // Diagnostika je k dispozici v obou režimech i stavech.
+  if (typeof onMicDiag === "function") {
+    buttonsEl.appendChild(makeButton("Diagnostika mikrofonu", "ghost", () => {
+      hide();
+      onMicDiag();
+    }));
+  }
+}
+
 function refreshButtons() {
   buttonsEl.textContent = "";
   const running = captionsApi && captionsApi.isRunning();
@@ -195,6 +206,7 @@ function refreshButtons() {
       captionsApi.stop();
       refreshButtons();
     }));
+    appendMicDiagButton();
   } else {
     const startBtn = makeButton("Spustit prezentaci s titulky", "primary", () => {
       const ok = captionsApi.start();
@@ -218,6 +230,7 @@ function refreshButtons() {
         onUpload();
       }));
     }
+    appendMicDiagButton();
   }
 }
 
@@ -278,6 +291,7 @@ export function initPanel(opts) {
   captionsApi = opts.captions;
   onUpload = opts.onUpload || null;
   onStartLive = opts.onStartLive || null;
+  onMicDiag = opts.onMicDiag || null;
   onModeChange = opts.onModeChange || null;
   buildPanel();
   window.addEventListener("keydown", onKeyCapture, true);
