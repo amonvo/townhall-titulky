@@ -56,6 +56,20 @@ let running = false;
 let rec = null;
 let wakeLock = null;
 
+// ---- Lifecycle rozpoznávání (pravdivý stav + chytrý restart) ----
+let RecognizerClass = null;    // test seam: mock třída místo SpeechRecognition
+let lastErrorCode = null;      // poslední ev.error (null = žádná chyba od výsledku)
+let lastErrorAt = 0;
+let hardStreak = 0;            // po sobě jdoucí tvrdé chyby (network/audio-capture/aborted)
+let unproductiveEnds = 0;      // konce bez jediného result eventu od startu
+let gotResultSinceStart = false;
+let backoffMs = 250;           // 250 → 500 → 1000 → 2000 → 4000 (cap); reset výsledkem
+let escalated = false;         // pilulka ukazuje eskalovanou příčinu
+let restartTimer = null;
+let lastEndWhileHidden = false;
+
+const HARD_ERRORS = new Set(["network", "audio-capture", "aborted"]);
+
 let googleFails = 0;
 let lastGoogleTry = 0;
 let lastInterimAt = 0;
@@ -194,8 +208,89 @@ function handleInterim(czText) {
 
 /* ===================== ROZPOZNÁVÁNÍ ŘEČI ===================== */
 
+// Jakýkoli výsledek (interim i final) = mikrofon i server žijí →
+// reset počítadel, backoffu i případné eskalace pilulky.
+function noteResult() {
+  gotResultSinceStart = true;
+  lastErrorCode = null;
+  hardStreak = 0;
+  if (unproductiveEnds || backoffMs !== 250 || escalated) {
+    unproductiveEnds = 0;
+    backoffMs = 250;
+    if (escalated) {
+      escalated = false;
+      setMic("poslouchám", "ok");
+    }
+  }
+}
+
+function resetLifecycle() {
+  lastErrorCode = null;
+  hardStreak = 0;
+  unproductiveEnds = 0;
+  gotResultSinceStart = false;
+  backoffMs = 250;
+  escalated = false;
+  lastEndWhileHidden = false;
+  if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
+}
+
+// Eskalace: opakovaná tvrdá chyba, nebo ≥3 neproduktivní konce s jinou
+// příčinou než tichem (`no-speech` je vždy benigní — normální pauza v řeči).
+function shouldEscalate() {
+  if (hardStreak >= 2) return true;
+  if (lastErrorCode === "no-speech") return false;
+  return unproductiveEnds >= 3;
+}
+
+function escalationPill() {
+  if (lastErrorCode === "network") {
+    setMic("síť rozpoznávání nedostupná — zkouším dál", "err");
+  } else if (lastErrorCode === "audio-capture") {
+    setMic("mikrofon nenalezen / nedává zvuk", "err");
+  } else if (lastErrorCode === "aborted") {
+    setMic("rozpoznávání přerušováno — okno nesmí být skryté", "warn");
+  } else {
+    setMic("restartuji… (" + (lastErrorCode || "bez odezvy") + ")", "warn");
+  }
+}
+
+function doRestart() {
+  restartTimer = null;
+  if (!running) return;
+  gotResultSinceStart = false;
+  try {
+    rec.start();
+  } catch (e) {
+    try {
+      rec = createRecognizer();
+      rec.start();
+    } catch (e2) {
+      // Nikdy se nevzdávat, dokud running (mimo not-allowed cestu).
+      setMic("selhalo — zkouším dál", "err");
+      scheduleRestart();
+      return;
+    }
+  }
+  console.info("[mic] start");
+  // Benigní cyklus: pilulka zůstává „poslouchám" (setMic stejný stav ignoruje).
+  if (!escalated) setMic("poslouchám", "ok");
+}
+
+function scheduleRestart(immediate) {
+  if (restartTimer) clearTimeout(restartTimer);
+  if (shouldEscalate()) {
+    escalated = true;
+    escalationPill();
+  }
+  const delay = immediate ? 0 : backoffMs;
+  backoffMs = Math.min(backoffMs * 2, 4000);
+  restartTimer = setTimeout(doRestart, delay);
+}
+
 function createRecognizer() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SR = RecognizerClass
+    || window.SpeechRecognition || window.webkitSpeechRecognition;
   const r = new SR();
   r.lang = "cs-CZ";
   r.continuous = true;
@@ -203,6 +298,7 @@ function createRecognizer() {
   r.maxAlternatives = 1;
 
   r.onresult = function (e) {
+    noteResult();
     let interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const res = e.results[i];
@@ -218,6 +314,10 @@ function createRecognizer() {
   };
 
   r.onerror = function (ev) {
+    lastErrorCode = ev.error || "unknown";
+    lastErrorAt = Date.now();
+    console.info("[mic] error " + lastErrorCode);
+    if (HARD_ERRORS.has(lastErrorCode)) hardStreak++;
     if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
       running = false;
       setMic("přístup zamítnut", "err");
@@ -227,15 +327,11 @@ function createRecognizer() {
 
   r.onend = function () {
     if (!running) { setMic("vypnuto"); return; }
-    setMic("restart…", "warn");
-    setTimeout(function () {
-      if (!running) return;
-      try { rec.start(); setMic("poslouchám", "ok"); }
-      catch (e) {
-        try { rec = createRecognizer(); rec.start(); setMic("poslouchám", "ok"); }
-        catch (e2) { setMic("selhalo", "err"); }
-      }
-    }, 250);
+    if (!gotResultSinceStart) unproductiveEnds++;
+    gotResultSinceStart = false; // konec uzavírá segment; další začíná čistý
+    lastEndWhileHidden = document.visibilityState === "hidden";
+    console.info("[mic] end (unproductive=" + unproductiveEnds + ")");
+    scheduleRestart();
   };
 
   return r;
@@ -248,7 +344,19 @@ function requestWakeLock() {
   navigator.wakeLock.request("screen").then(function (wl) { wakeLock = wl; }).catch(function () {});
 }
 document.addEventListener("visibilitychange", function () {
-  if (document.visibilityState === "visible" && running) requestWakeLock();
+  if (document.visibilityState === "visible" && running) {
+    requestWakeLock();
+    // Konec nastal na skryté stránce (Chrome pozastavuje rozpoznávání) →
+    // po odkrytí restart HNED, bez backoffu, s čistým počítadlem.
+    if (lastEndWhileHidden && restartTimer) {
+      lastEndWhileHidden = false;
+      unproductiveEnds = 0;
+      backoffMs = 250;
+      clearTimeout(restartTimer);
+      restartTimer = null;
+      doRestart();
+    }
+  }
 });
 
 /* ===================== STATUS PILLS ===================== */
@@ -258,8 +366,16 @@ function applyPillState(pill, state) {
   if (state) pill.classList.add(state);
 }
 
+// Stejný text + stav se ignoruje: benigní restarty tak nezpůsobí flicker
+// pilulky ani zbytečné probouzení transient UI (změna stavu = objevení pills).
+let lastMicText = null, lastMicState = null;
 function setMic(text, state) {
   if (!micStateEl) return;
+  if (text === lastMicText && state === lastMicState) {
+    if (recDotEl) recDotEl.classList.toggle("listening", running && state === "ok");
+    return;
+  }
+  lastMicText = text; lastMicState = state;
   micStateEl.textContent = text;
   applyPillState(micPillEl, state);
   // REC tečka svítí, když posloucháme.
@@ -267,8 +383,11 @@ function setMic(text, state) {
   showTransient();
 }
 
+let lastTrText = null, lastTrState = null;
 function setTr(text, state) {
   if (!trStateEl) return;
+  if (text === lastTrText && state === lastTrState) return;
+  lastTrText = text; lastTrState = state;
   trStateEl.textContent = text;
   applyPillState(trPillEl, state);
   showTransient();
@@ -381,15 +500,17 @@ export function isSpeechSupported() {
 }
 
 export function startCaptions() {
-  if (!isSpeechSupported()) {
+  if (!isSpeechSupported() && !RecognizerClass) {
     setMic("nepodporováno (jen Chrome)", "err");
     return false;
   }
   if (running) return true;
+  resetLifecycle();
   running = true;
   try {
     rec = createRecognizer();
     rec.start();
+    console.info("[mic] start");
     setMic("poslouchám", "ok");
   } catch (e) {
     running = false;
@@ -402,6 +523,7 @@ export function startCaptions() {
 
 export function stopCaptions() {
   running = false;
+  resetLifecycle();
   if (recDotEl) recDotEl.classList.remove("listening");
   try { if (rec) rec.stop(); } catch (e) {}
   setMic("vypnuto");
@@ -438,6 +560,27 @@ export function initCaptions(opts) {
           const s = ++t.seq;
           applyInterimDisplay(t, s, translations ? translations[t.code] : null);
         });
+      },
+      // Mock SpeechRecognition třída (nutno nastavit PŘED startCaptions) —
+      // testy pak skriptují lifecycle přímo přes handlery instance.
+      useMockRecognizer: function (cls) { RecognizerClass = cls || null; },
+      getLifecycle: function () {
+        return {
+          unproductiveEnds: unproductiveEnds,
+          backoffMs: backoffMs,
+          escalated: escalated,
+          lastErrorCode: lastErrorCode,
+          hardStreak: hardStreak,
+          running: running,
+        };
+      },
+      micPill: function () {
+        return {
+          text: micStateEl ? micStateEl.textContent : null,
+          ok: micPillEl ? micPillEl.classList.contains("ok") : false,
+          warn: micPillEl ? micPillEl.classList.contains("warn") : false,
+          err: micPillEl ? micPillEl.classList.contains("err") : false,
+        };
       },
     };
   }

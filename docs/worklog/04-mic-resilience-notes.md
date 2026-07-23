@@ -1,0 +1,49 @@
+# Worklog — poznámky k rozhodnutím (04-mic-resilience)
+
+Rozhodnutí při nejasnostech (ground rule 4: sensible default + poznámka, nezastavovat).
+
+## Obecné
+
+- `.gitignore` zkontrolován (`/[0-9]*.md`, `content/`, `publish/`) — beze změny.
+- Doslovná kopie promptu → `docs/worklog/04-mic-resilience.md`, commit s Fází 1.
+- Překladová/sekvenční logika enginu nedotčena (ground rule 5) — mění se jen
+  lifecycle rozpoznávání, stavové pilulky a přibývá diagnostika.
+
+## Fáze 1 — lifecycle rozpoznávání
+
+- Stav: `lastErrorCode`+`lastErrorAt`, `hardStreak` (po sobě jdoucí
+  network/audio-capture/aborted), `unproductiveEnds`, `backoffMs`
+  (250→500→1000→2000→4000 cap), `escalated`, `lastEndWhileHidden`.
+  Jakýkoli výsledek (interim i final, i prázdný) vše resetuje.
+- **Sémantika „neproduktivního konce":** konec segmentu, ve kterém nepadl
+  žádný result event. Konec segmentu VŽDY uzavírá produktivitu
+  (`gotResultSinceStart = false` v onend) — konec segmentu s výsledkem je
+  produktivní a nepočítá se, další segment začíná čistý. (Bez toho by rychlé
+  sekvence konců počítaly špatně — chyceno testem.)
+- **Eskalace:** `hardStreak >= 2` NEBO (`unproductiveEnds >= 3` a poslední
+  chyba není `no-speech`). `no-speech` je benigní VŽDY (normální pauzy v řeči
+  produkují no-speech + end donekonečna a nesmí nikdy eskalovat, i když
+  počítadlo roste — spec to říká explicitně: „Benign cycle (silence):
+  no-speech…").
+- **Rozhodnutí (default):** eskalace bez jakéhokoli error kódu (přesně polní
+  incident — konce bez chyb) → text `restartuji… (bez odezvy)` (spec dává
+  vzor `restartuji… (<code>)`, ale kód není žádný).
+- **Žádný flicker:** `setMic`/`setTr` ignorují nastavení stejného textu+stavu
+  → benigní restart pilulku nezmění (zůstává „poslouchám"/ok) a hlavně
+  nevyvolá `showTransient()` — stejná hodnota není „změna stavu", takže pills
+  správně mizí po 4 s i při tichu s restarty. (Vedlejší zisk: opakované
+  „Google"/ok od překladače už také neprobouzí pills každou větou.)
+- Backoff: delay se bere PŘED zdvojením (první restart 250 ms). Restart při
+  selhání `rec.start()` → recreate; když selže i to → `selhalo — zkouším dál`
+  (err) a plánuje se další pokus — nikdy se nevzdává, dokud `running`
+  (mimo not-allowed cestu, ta `running` shodí).
+- `visibilitychange` → visible: pokud poslední konec nastal na skryté stránce
+  a čeká restart, provede se HNED (bez backoffu) s vynulovaným počítadlem.
+- Forensika: `console.info` s prefixem `[mic]` — `start`, `end
+  (unproductive=N)`, `error <code>`. Jeden řádek na událost.
+- Test seam rozšířen: `useMockRecognizer(cls)` (nutno před `start()`),
+  `getLifecycle()`, `micPill()`.
+- **Ověření (Puppeteer + mock SR): 14/14 asercí OK, 0 chyb v konzoli** —
+  poslouchám bez flickeru při tichu (3×), růst backoffu 500→1000→2000, reset
+  výsledkem, eskalace po 3 neproduktivních koncích („bez odezvy"), network/
+  audio-capture/aborted hlášky, stop → vypnuto + čistá počítadla, [mic] logy.
