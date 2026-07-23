@@ -21,6 +21,7 @@ let overlayEl, subEl, warnsEl, msgEl, buttonsEl, cardsEl;
 let slidesApi = null;
 let captionsApi = null;
 let onUpload = null;    // otevře wizard nahrání prezentace (napojuje app.js)
+let onStartLive = null; // spustí flow živého zrcadlení (napojuje app.js)
 let onModeChange = null;
 let visible = false;
 
@@ -197,14 +198,19 @@ function refreshButtons() {
   } else {
     const startBtn = makeButton("Spustit prezentaci s titulky", "primary", () => {
       const ok = captionsApi.start();
-      if (ok) { hide(); }
-      else {
+      if (ok) {
+        hide();
+        if (getMode() === "live" && typeof onStartLive === "function") onStartLive();
+      } else {
         showMessage("Mikrofon se nepodařilo spustit — zkontroluj vstupní zařízení ve Windows.");
       }
     });
     if (!isSpeechSupported()) startBtn.disabled = true;
     buttonsEl.appendChild(startBtn);
-    buttonsEl.appendChild(makeButton("Jen prezentace (bez titulků)", "ghost", () => hide()));
+    buttonsEl.appendChild(makeButton("Jen prezentace (bez titulků)", "ghost", () => {
+      hide();
+      if (getMode() === "live" && typeof onStartLive === "function") onStartLive();
+    }));
     // Nahrání prezentace má smysl jen v PDF režimu — capture nic nepřipravuje.
     if (typeof onUpload === "function" && getMode() === "pdf") {
       buttonsEl.appendChild(makeButton("Nahrát novou prezentaci", "ghost", () => {
@@ -271,6 +277,7 @@ export function initPanel(opts) {
   slidesApi = opts.slides || null;
   captionsApi = opts.captions;
   onUpload = opts.onUpload || null;
+  onStartLive = opts.onStartLive || null;
   onModeChange = opts.onModeChange || null;
   buildPanel();
   window.addEventListener("keydown", onKeyCapture, true);

@@ -60,3 +60,36 @@ Rozhodnutí při nejasnostech (ground rule 4: sensible default + poznámka, neza
   persistence přes reload, viditelnost wizard tlačítka podle režimu, PDF flow
   beze změny, live+chybějící obsah → žádný wizard ani warning,
   pdf+chybějící obsah → wizard-first.
+
+## Fáze 3 — Živý PowerPoint (app/live.js)
+
+- Stavový stroj: `guidance` (3 kroky + „Vybrat okno PowerPointu") → `active`
+  (stream na stage) → `ended` („Sdílení okna skončilo." + Znovu vybrat /
+  Zpět na úvod). Zavření pickeru (NotAllowedError s „dismissed") → tiše zpět
+  na návod; jiné odmítnutí → česká hláška o povolení sdílení.
+- Zobrazení řeší `body.live-active`: video (object-fit contain, box-shadow
+  jako canvas) se ukáže, PDF canvas + counter + video/gif overlaye se schovají
+  `display:none !important`. Video je `muted` — zvuk jde ze systému
+  (PowerPoint sám), zachytává se jen obraz (`audio: false`).
+- Pilulka `zdroj: PowerPoint` (ok) se přidává do #status-pills od captions a
+  registruje do transient idle-hide mechanismu; mimo aktivní stream je
+  `display:none`.
+- Navigační klávesy (šipky, PageUp/Down, mezerník, Home/End) se v aktivním
+  režimu pohltí capture handlerem → toast „Prezentaci ovládej v okně
+  PowerPointu." (4 s, opakovaný stisk restartuje časovač). `F`, `+/-`, `C`,
+  `Esc` propadají dál. **Rozhodnutí (default):** Home/End blokovány také
+  (jsou to navigační klávesy, spec je nevyjmenovává explicitně).
+- Esc: z guidance/ended overlaye = zpět na úvod (stopImmediatePropagation —
+  stejná past jako u wizardu); z aktivního zrcadlení propadá na panel
+  (mikrofon i stream běží dál, „Pokračovat" se vrátí).
+- **Substituce v testech (dle explicitního povolení spec):** reálný
+  getDisplayMedia picker nejde v headless deterministicky řídit
+  (`--auto-select-desktop-capture-source` je nespolehlivé pro okna), stavový
+  stroj se testuje fake MediaStreamem z `canvas.captureStream()` za `?test=1`
+  (`__liveTest.attachFake/endTracks`; ended se dispatchuje ručně —
+  programový `track.stop()` událost `ended` lokálně nevyvolá). Reálný picker
+  flow ověří operátor (VERIFY).
+- **Ověření (Puppeteer): 14/14 asercí OK, 0 chyb v konzoli** — guidance
+  obrazovka + texty, Esc zpět, připojení streamu (video+srcObject, skrytý
+  canvas/counter, pilulka ok), blokace navigace + toast, `+` funguje,
+  ended overlay + tlačítka, návrat na panel.

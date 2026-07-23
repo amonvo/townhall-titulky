@@ -393,6 +393,70 @@ body {
   margin: 0 .1em;
 }
 
+/* ===== Živý PowerPoint (capture režim) ===== */
+#live-video {
+  display: none;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #0B0F14;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, .55);
+}
+
+/* Při aktivním zrcadlení: video místo PDF canvasu, counter a overlaye pryč. */
+body.live-active #live-video { display: block; }
+body.live-active #slide-canvas,
+body.live-active #slide-counter,
+body.live-active .video-wrap,
+body.live-active .gif-wrap { display: none !important; }
+
+#live-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90; /* pod start panelem (100) — Esc z overlaye vede na panel */
+  background: rgba(4, 8, 14, .82);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#live-overlay.hidden { display: none; }
+
+.live-steps {
+  text-align: left;
+  max-width: 74vh;
+  margin: 1vh auto 2vh;
+  padding-left: 3.4vh;
+  font-size: 1.9vh;
+  color: #F5F7FA;
+  line-height: 1.55;
+}
+
+.live-steps li { margin: 1.2vh 0; }
+.live-steps li::marker { color: #2F6FEB; font-weight: 600; }
+
+#live-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 25vh;
+  transform: translateX(-50%);
+  z-index: 60;
+  background: #10161F;
+  border: 1px solid #1E2833;
+  color: #F5F7FA;
+  font-size: 1.9vh;
+  padding: 1.2vh 2.2vh;
+  border-radius: 999px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .5);
+  transition: opacity .25s ease;
+}
+
+#live-toast.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* ===== Wizard nahrání prezentace ===== */
 #wizard-overlay {
   position: fixed;

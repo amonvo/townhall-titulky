@@ -8,6 +8,7 @@ import { initSlides } from "./slides.js";
 import { initCaptions } from "./captions.js";
 import { initPanel, getMode } from "./panel.js";
 import { initWizard } from "./wizard.js";
+import { initLive } from "./live.js";
 
 console.log("[townhall-titulky] pdf.js verze:", pdfjsVersion);
 
@@ -25,10 +26,14 @@ async function main() {
   // Wizard nahrání prezentace; po zavření se vrací start panel.
   const wizard = initWizard({ onClose: () => { if (panel) panel.show(); } });
 
+  // Živé zrcadlení PowerPointu (getDisplayMedia); zpět vede na start panel.
+  const live = initLive({ onBackToPanel: () => { if (panel) panel.show(); } });
+
   // Start panel (overlay): deck name + počet slajdů, kompat. varování, tlačítka.
   panel = initPanel({
     slides, captions,
     onUpload: () => wizard.open(),
+    onStartLive: () => live.start(),
   });
 
   // Chybí/nekompletní obsah → místo start panelu rovnou wizard (drop zóna).
@@ -49,7 +54,7 @@ async function main() {
   }
 
   // Zpřístupníme pro ladění.
-  window.__townhall = { pdfjsVersion, slides, captions, panel, wizard };
+  window.__townhall = { pdfjsVersion, slides, captions, panel, wizard, live };
 }
 
 if (document.readyState === "loading") {
