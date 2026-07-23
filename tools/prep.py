@@ -102,6 +102,29 @@ def _find_ffmpeg():
 
 # ---- Jádro pipeline --------------------------------------------------------
 
+def _pic_fractions(pic, cx, cy):
+    """
+    Přečte <a:off>/<a:ext> z <p:spPr><a:xfrm> daného <p:pic> a vrátí
+    (x, y, w, h, xfrm_missing) jako zlomky velikosti slidu.
+    Chybějící xfrm (dědí z layoutu) → celý slajd {0,0,1,1} + missing=True.
+    """
+    xfrm = None
+    spPr = pic.find(_q("p", "spPr"))
+    if spPr is not None:
+        xfrm = spPr.find(_q("a", "xfrm"))
+    off = ext = None
+    if xfrm is not None:
+        off = xfrm.find(_q("a", "off"))
+        ext = xfrm.find(_q("a", "ext"))
+    if off is not None and ext is not None:
+        return (round(int(off.get("x")) / cx, 4),
+                round(int(off.get("y")) / cy, 4),
+                round(int(ext.get("cx")) / cx, 4),
+                round(int(ext.get("cy")) / cy, 4),
+                False)
+    return (0.0, 0.0, 1.0, 1.0, True)
+
+
 def analyze_pptx(zf):
     """
     Zanalyzuje otevřený PPTX zip a vrátí strukturu:
@@ -109,7 +132,8 @@ def analyze_pptx(zf):
       'sldSz': (cx, cy),
       'slides': [ { 'display': 1, 'part': 'ppt/slides/slide1.xml',
                     'videos': [ {rel_id, target(abs part path), x,y,w,h,
-                                 xfrm_missing(bool)} ] }, ... ],
+                                 xfrm_missing(bool)} ],
+                    'gifs':   [ {rel_id, target, x,y,w,h, xfrm_missing} ] }, ... ],
       'warnings': [str, ...],
     }
     """
@@ -147,7 +171,7 @@ def analyze_pptx(zf):
 
     slides = []
     for idx, part in enumerate(slide_parts, start=1):
-        entry = {"display": idx, "part": part, "videos": []}
+        entry = {"display": idx, "part": part, "videos": [], "gifs": []}
         try:
             slide_xml = ET.fromstring(zf.read(part))
         except KeyError:
@@ -169,72 +193,84 @@ def analyze_pptx(zf):
                 seen_targets.add(tgt)
                 video_rels[rid] = tgt
 
-        if not video_rels:
-            slides.append(entry)
-            continue
+        if video_rels:
+            # Najdi <p:pic>, jehož <a:videoFile> odkazuje na některý video rel_id.
+            for pic in slide_xml.iter(_q("p", "pic")):
+                vf = None
+                for cand in pic.iter(_q("a", "videoFile")):
+                    vf = cand
+                    break
+                if vf is None:
+                    continue
+                # a:videoFile může mít r:link nebo r:embed
+                link = vf.get(_q("r", "link")) or vf.get(_q("r", "embed"))
+                if link not in video_rels:
+                    continue
 
-        # Najdi <p:pic>, jehož <a:videoFile> odkazuje na některý video rel_id.
-        # Přečti xfrm z <p:spPr><a:xfrm>.
-        for pic in slide_xml.iter(_q("p", "pic")):
-            vf = None
-            for cand in pic.iter(_q("a", "videoFile")):
-                vf = cand
-                break
-            if vf is None:
-                continue
-            # a:videoFile může mít r:link nebo r:embed
-            link = vf.get(_q("r", "link")) or vf.get(_q("r", "embed"))
-            if link not in video_rels:
-                continue
+                target = video_rels[link]
+                x, y, w, h, xfrm_missing = _pic_fractions(pic, cx, cy)
+                if xfrm_missing:
+                    warnings.append(
+                        "Slide %d: video %s nemá xfrm (dědí z layoutu) → fallback "
+                        "na celý slajd {0,0,1,1}" % (idx, posixpath.basename(target))
+                    )
 
-            target = video_rels[link]
-            xfrm = None
-            spPr = pic.find(_q("p", "spPr"))
-            if spPr is not None:
-                xfrm = spPr.find(_q("a", "xfrm"))
+                entry["videos"].append({
+                    "rel_id": link,
+                    "target": target,
+                    "x": x, "y": y, "w": w, "h": h,
+                    "xfrm_missing": xfrm_missing,
+                })
+                # video rel spárováno; ať se nespáruje znovu jiným pic
+                video_rels.pop(link, None)
 
-            if xfrm is not None:
-                off = xfrm.find(_q("a", "off"))
-                ext = xfrm.find(_q("a", "ext"))
-            else:
-                off = ext = None
-
-            if off is not None and ext is not None:
-                ox = int(off.get("x")); oy = int(off.get("y"))
-                ew = int(ext.get("cx")); eh = int(ext.get("cy"))
-                x = round(ox / cx, 4)
-                y = round(oy / cy, 4)
-                w = round(ew / cx, 4)
-                h = round(eh / cy, 4)
-                xfrm_missing = False
-            else:
-                x, y, w, h = 0.0, 0.0, 1.0, 1.0
-                xfrm_missing = True
+            # Video rely bez odpovídajícího pic (vzácné) — fallback pozice
+            for rid, target in list(video_rels.items()):
                 warnings.append(
-                    "Slide %d: video %s nemá xfrm (dědí z layoutu) → fallback "
-                    "na celý slajd {0,0,1,1}" % (idx, posixpath.basename(target))
+                    "Slide %d: video rel %s nemá <p:pic>/<a:videoFile> → fallback "
+                    "{0,0,1,1}" % (idx, posixpath.basename(target))
                 )
+                entry["videos"].append({
+                    "rel_id": rid,
+                    "target": target,
+                    "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0,
+                    "xfrm_missing": True,
+                })
 
-            entry["videos"].append({
-                "rel_id": link,
-                "target": target,
+        # Animované GIFy: <p:pic> BEZ <a:videoFile>, jehož <a:blip> míří přes
+        # image relationship na .gif (case-insensitive). V PDF exportu z nich
+        # zbyde jen první snímek (často prázdný bílý box) — app je překryje.
+        for pic in slide_xml.iter(_q("p", "pic")):
+            has_video = False
+            for _cand in pic.iter(_q("a", "videoFile")):
+                has_video = True
+                break
+            if has_video:
+                continue
+            blip = None
+            for cand in pic.iter(_q("a", "blip")):
+                blip = cand
+                break
+            if blip is None:
+                continue
+            rid = blip.get(_q("r", "embed")) or blip.get(_q("r", "link"))
+            rel = slide_rels.get(rid)
+            if rel is None or not rel["type"].endswith("/image"):
+                continue
+            tgt = _resolve_target(posixpath.dirname(part), rel["target"])
+            if not tgt.lower().endswith(".gif"):
+                continue
+            x, y, w, h, xfrm_missing = _pic_fractions(pic, cx, cy)
+            if xfrm_missing:
+                warnings.append(
+                    "Slide %d: GIF %s nemá xfrm (dědí z layoutu) → fallback "
+                    "na celý slajd {0,0,1,1}" % (idx, posixpath.basename(tgt))
+                )
+            entry["gifs"].append({
+                "rel_id": rid,
+                "target": tgt,
                 "x": x, "y": y, "w": w, "h": h,
                 "xfrm_missing": xfrm_missing,
-            })
-            # video rel spárováno; ať se nespáruje znovu jiným pic
-            video_rels.pop(link, None)
-
-        # Video rely bez odpovídajícího pic (vzácné) — fallback pozice
-        for rid, target in list(video_rels.items()):
-            warnings.append(
-                "Slide %d: video rel %s nemá <p:pic>/<a:videoFile> → fallback "
-                "{0,0,1,1}" % (idx, posixpath.basename(target))
-            )
-            entry["videos"].append({
-                "rel_id": rid,
-                "target": target,
-                "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0,
-                "xfrm_missing": True,
             })
 
         slides.append(entry)
@@ -283,6 +319,7 @@ def prepare_content(pptx_path, pdf_path=None, out_dir="content",
 
         emit("videos", "Extrahuji videa…")
         config_videos = []
+        config_overlays = []
         for slide in info["slides"]:
             for v in slide["videos"]:
                 src_part = v["target"]           # ppt/media/mediaN.MOV
@@ -333,6 +370,31 @@ def prepare_content(pptx_path, pdf_path=None, out_dir="content",
                     "file": ref_name,
                     "x": v["x"], "y": v["y"], "w": v["w"], "h": v["h"],
                 })
+                config_overlays.append({
+                    "slide": slide["display"], "type": "video", "file": ref_name,
+                    "x": v["x"], "y": v["y"], "w": v["w"], "h": v["h"],
+                })
+
+            # GIFy: extrakce beze změn formátu (animaci vykreslí prohlížeč)
+            for g in slide["gifs"]:
+                src_part = g["target"]
+                base = posixpath.basename(src_part)
+                stem, ext = os.path.splitext(base)
+                out_name = stem + ext.lower()
+                out_path = os.path.join(videos_dir, out_name)
+                try:
+                    data = zf.read(src_part)
+                except KeyError:
+                    warnings.append("Cíl GIFu %s nenalezen v balíku (přeskočeno)"
+                                    % src_part)
+                    continue
+                with open(out_path, "wb") as fh:
+                    fh.write(data)
+                config_overlays.append({
+                    "slide": slide["display"], "type": "gif",
+                    "file": "videos/" + out_name,
+                    "x": g["x"], "y": g["y"], "w": g["w"], "h": g["h"],
+                })
 
         slide_count = len(info["slides"])
 
@@ -353,9 +415,15 @@ def prepare_content(pptx_path, pdf_path=None, out_dir="content",
 
     emit("config", "Zapisuji config.json…")
     config = {
+        "version": 2,
         "pdf": "slides.pdf",
         "slideCount": slide_count,
         "deckName": deck_name,
+        # poměr stran slidu (pro detekci okrajů v PDF); default appky je 16:9
+        "slideAspect": round(cx / cy, 4),
+        # v2: jednotné overlaye (video + gif); app čte overlays, jinak videos
+        "overlays": config_overlays,
+        # legacy klíč — jedna verze zpětné kompatibility
         "videos": config_videos,
     }
 
@@ -368,6 +436,7 @@ def prepare_content(pptx_path, pdf_path=None, out_dir="content",
         "deckName": deck_name,
         "slideCount": slide_count,
         "videos": config_videos,
+        "overlays": config_overlays,
         "warnings": warnings,
     }
 
@@ -399,13 +468,17 @@ def _print_summary(config, warnings, out_dir, has_pdf):
     print("Počet slidů: %d" % config["slideCount"])
     print("PDF:         %s" % ("content/slides.pdf" if has_pdf
                                else "(nedodáno --pdf; app očekává content/slides.pdf)"))
-    if config["videos"]:
-        print("Videa (%d):" % len(config["videos"]))
-        for v in config["videos"]:
-            print("  slide %-3d → %-24s  poz [x=%.4f y=%.4f w=%.4f h=%.4f]"
-                  % (v["slide"], v["file"], v["x"], v["y"], v["w"], v["h"]))
+    overlays = config.get("overlays")
+    if overlays is None:
+        overlays = [dict(v, type="video") for v in config.get("videos", [])]
+    if overlays:
+        print("Overlaye (%d):" % len(overlays))
+        for v in overlays:
+            print("  slide %-3d %-5s → %-24s  poz [x=%.4f y=%.4f w=%.4f h=%.4f]"
+                  % (v["slide"], v.get("type", "video"), v["file"],
+                     v["x"], v["y"], v["w"], v["h"]))
     else:
-        print("Videa:       žádná nenalezena")
+        print("Overlaye:    žádné (videa ani GIFy)")
     if warnings:
         print("-" * 60)
         print("VAROVÁNÍ (%d):" % len(warnings))
@@ -433,6 +506,7 @@ def _build_synthetic_pptx(path):
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
         '<Default Extension="xml" ContentType="application/xml"/>'
         '<Default Extension="mov" ContentType="video/quicktime"/>'
+        '<Default Extension="gif" ContentType="image/gif"/>'
         '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>'
         '<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>'
         '<Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>'
@@ -465,10 +539,23 @@ def _build_synthetic_pptx(path):
         '</Relationships>'
     ) % REL
 
+    # slide1: p:pic BEZ videoFile s blip r:embed="rId9" na anim1.GIF,
+    # xfrm 0.25/0.25/0.25/0.25 (test GIF overlay extrakce)
     slide1 = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<p:sld xmlns:p="%s" xmlns:a="%s" xmlns:r="%s">'
-        '<p:cSld><p:spTree></p:spTree></p:cSld>'
+        '<p:cSld><p:spTree>'
+        '<p:pic>'
+        '<p:nvPicPr><p:cNvPr id="7" name="Gif"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>'
+        '<p:blipFill><a:blip r:embed="rId9"/></p:blipFill>'
+        '<p:spPr>'
+        '<a:xfrm>'
+        '<a:off x="3048000" y="1714500"/>'
+        '<a:ext cx="3048000" cy="1714500"/>'
+        '</a:xfrm>'
+        '</p:spPr>'
+        '</p:pic>'
+        '</p:spTree></p:cSld>'
         '</p:sld>'
     ) % (P, A, R)
 
@@ -497,7 +584,9 @@ def _build_synthetic_pptx(path):
 
     slide1_rels = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Relationships xmlns="%s"></Relationships>'
+        '<Relationships xmlns="%s">'
+        '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/anim1.GIF"/>'
+        '</Relationships>'
     ) % REL
 
     # rId2 = /video, rId3 = /media (obojí na stejný soubor → test dedupe)
@@ -519,6 +608,7 @@ def _build_synthetic_pptx(path):
         zf.writestr("ppt/slides/_rels/slide1.xml.rels", slide1_rels)
         zf.writestr("ppt/slides/_rels/slide2.xml.rels", slide2_rels)
         zf.writestr("ppt/media/media1.MOV", b"\x00\x01\x02JUNKMOVBYTES\x03\x04")
+        zf.writestr("ppt/media/anim1.GIF", b"GIF89a\x01\x00\x01\x00JUNK")
 
 
 def self_test():
@@ -573,6 +663,28 @@ def self_test():
             check(True, "config.json je validní JSON")
         except Exception as e:
             check(False, "config.json validní JSON (%s)" % e)
+
+        # 8b) config v2: overlays (video + gif), legacy videos, slideAspect
+        check(cfg.get("version") == 2, "config version == 2")
+        overlays = cfg.get("overlays") or []
+        check(len(overlays) == 2, "overlays: 2 položky (1 video + 1 gif)")
+        gif = next((o for o in overlays if o.get("type") == "gif"), None)
+        vid = next((o for o in overlays if o.get("type") == "video"), None)
+        check(vid is not None and vid["slide"] == 2
+              and vid["file"] == "videos/media1.mov",
+              "overlay video: slide 2, videos/media1.mov")
+        check(gif is not None and gif["slide"] == 1
+              and gif["file"] == "videos/anim1.gif"
+              and gif["x"] == 0.25 and gif["y"] == 0.25
+              and gif["w"] == 0.25 and gif["h"] == 0.25,
+              "overlay gif: slide 1, videos/anim1.gif, fractions 0.25")
+        gif_path = os.path.join(out, "videos", "anim1.gif")
+        check(os.path.isfile(gif_path) and os.path.getsize(gif_path) > 0,
+              "GIF soubor extrahován (přípona zmenšena)")
+        check(abs(cfg.get("slideAspect", 0) - round(12192000 / 6858000, 4)) < 1e-9,
+              "slideAspect == 16:9 z sldSz")
+        check(len(cfg.get("videos") or []) == 1,
+              "legacy klíč videos zůstává (1 položka)")
 
         # 9) Same-file PDF: --pdf ukazuje přímo na content/slides.pdf →
         #    nesmí spadnout (SameFileError) a soubor nesmí být zničen.

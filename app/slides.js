@@ -19,9 +19,10 @@ let renderToken = 0;       // ruší zastaralé async rendery
 let resizeTimer = null;
 
 let stageEl, canvasEl, counterEl;
-// video overlay: mapa "číslo slajdu" -> pole prvků { entry, wrap, video, badge }
-const videoBySlide = new Map();
-let activeVideos = [];     // video prvky aktuálního slajdu
+// overlaye (video + gif): mapa "číslo slajdu" -> pole { entry, wrap, kind, video?, badge? }
+const overlaysBySlide = new Map();
+let activeOverlays = [];   // overlay prvky aktuálního slajdu
+let lastWheelAt = 0;       // throttle kolečka (1 krok / 300 ms)
 
 // prvky, které se schovávají po nečinnosti (counter + Fáze 4 pills)
 const transientEls = new Set();
@@ -118,42 +119,66 @@ function updateCounter() {
   if (counterEl) counterEl.textContent = current + " / " + pageCount;
 }
 
-// ---- Video overlay ---------------------------------------------------------
+// ---- Overlaye (video + gif) ------------------------------------------------
+// Config v2 má jednotné `overlays` [{slide, type, file, x, y, w, h}];
+// starší config jen `videos` → mapuje se na type "video".
+function overlayEntries() {
+  if (config && Array.isArray(config.overlays)) return config.overlays;
+  if (config && Array.isArray(config.videos)) {
+    return config.videos.map((v) => Object.assign({ type: "video" }, v));
+  }
+  return [];
+}
+
 function buildVideoOverlays() {
-  const list = (config && Array.isArray(config.videos)) ? config.videos : [];
-  list.forEach((entry) => {
-    const wrap = document.createElement("div");
-    wrap.className = "video-wrap ui-hidden-none";
+  overlayEntries().forEach((entry) => {
+    let rec;
+    if (entry.type === "gif") {
+      // GIF: <img> — animuje nativně, žádné ovládání; kliky propadají
+      // na navigaci (pointer-events: none na wrapu).
+      const wrap = document.createElement("div");
+      wrap.className = "gif-wrap";
+      const img = document.createElement("img");
+      img.className = "slide-gif";
+      img.src = CONTENT_BASE + entry.file;
+      img.alt = "";
+      wrap.appendChild(img);
+      wrap.style.display = "none";
+      stageEl.appendChild(wrap);
+      rec = { entry, wrap, kind: "gif" };
+    } else {
+      const wrap = document.createElement("div");
+      wrap.className = "video-wrap";
 
-    const video = document.createElement("video");
-    video.className = "slide-video";
-    video.src = CONTENT_BASE + entry.file;
-    video.preload = "none";        // "auto" nastavíme jen pro aktuální slajd
-    video.playsInline = true;
-    video.controls = false;
-    // Ne muted — sál musí video slyšet.
+      const video = document.createElement("video");
+      video.className = "slide-video";
+      video.src = CONTENT_BASE + entry.file;
+      video.preload = "none";      // "auto" nastavíme jen pro aktuální slajd
+      video.playsInline = true;
+      video.controls = false;
+      // Ne muted — sál musí video slyšet.
 
-    const badge = document.createElement("button");
-    badge.className = "play-badge";
-    badge.type = "button";
-    badge.setAttribute("aria-label", "Přehrát video");
-    badge.textContent = "▶";
+      const badge = document.createElement("button");
+      badge.className = "play-badge";
+      badge.type = "button";
+      badge.setAttribute("aria-label", "Přehrát video");
+      badge.textContent = "▶";
 
-    const toggle = () => toggleVideo(video, badge);
-    badge.addEventListener("click", toggle);
-    video.addEventListener("click", toggle);
-    video.addEventListener("play", () => { badge.classList.add("hidden"); });
-    video.addEventListener("pause", () => { badge.classList.remove("hidden"); });
-    video.addEventListener("ended", () => { badge.classList.remove("hidden"); });
+      const toggle = () => toggleVideo(video, badge);
+      badge.addEventListener("click", toggle);
+      video.addEventListener("click", toggle);
+      video.addEventListener("play", () => { badge.classList.add("hidden"); });
+      video.addEventListener("pause", () => { badge.classList.remove("hidden"); });
+      video.addEventListener("ended", () => { badge.classList.remove("hidden"); });
 
-    wrap.appendChild(video);
-    wrap.appendChild(badge);
-    wrap.style.display = "none";
-    stageEl.appendChild(wrap);
-
-    const rec = { entry, wrap, video, badge };
-    if (!videoBySlide.has(entry.slide)) videoBySlide.set(entry.slide, []);
-    videoBySlide.get(entry.slide).push(rec);
+      wrap.appendChild(video);
+      wrap.appendChild(badge);
+      wrap.style.display = "none";
+      stageEl.appendChild(wrap);
+      rec = { entry, wrap, kind: "video", video, badge };
+    }
+    if (!overlaysBySlide.has(entry.slide)) overlaysBySlide.set(entry.slide, []);
+    overlaysBySlide.get(entry.slide).push(rec);
   });
 }
 
@@ -180,20 +205,22 @@ function positionOne(rec) {
 }
 
 function positionActiveVideos() {
-  activeVideos.forEach(positionOne);
+  activeOverlays.forEach(positionOne);
 }
 
 function showVideosFor(num) {
-  // Skryj/pauzni videa předchozího slajdu (pozice se zachová).
-  activeVideos.forEach((rec) => {
-    if (!rec.video.paused) rec.video.pause();
+  // Skryj/pauzni overlaye předchozího slajdu (pozice videa se zachová).
+  activeOverlays.forEach((rec) => {
+    if (rec.kind === "video") {
+      if (!rec.video.paused) rec.video.pause();
+      rec.video.preload = "none";
+    }
     rec.wrap.style.display = "none";
-    rec.video.preload = "none";
   });
-  activeVideos = videoBySlide.get(num) || [];
-  activeVideos.forEach((rec) => {
+  activeOverlays = overlaysBySlide.get(num) || [];
+  activeOverlays.forEach((rec) => {
     rec.wrap.style.display = "block";
-    rec.video.preload = "auto";
+    if (rec.kind === "video") rec.video.preload = "auto";
     positionOne(rec);
   });
 }
@@ -213,7 +240,11 @@ function next() { goTo(current + 1); }
 function prev() { goTo(current - 1); }
 
 function currentHasVideo() {
-  return activeVideos.length > 0;
+  return activeOverlays.some((rec) => rec.kind === "video");
+}
+
+function firstActiveVideo() {
+  return activeOverlays.find((rec) => rec.kind === "video") || null;
 }
 
 function toggleFullscreen() {
@@ -242,7 +273,7 @@ function onKeyDown(e) {
     case "Spacebar":
       e.preventDefault();
       if (currentHasVideo()) {
-        const rec = activeVideos[0];
+        const rec = firstActiveVideo();
         toggleVideo(rec.video, rec.badge);
       } else {
         next();
@@ -259,6 +290,58 @@ function onKeyDown(e) {
 function onResize() {
   if (resizeTimer) clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => { renderPage(current); }, RESIZE_DEBOUNCE_MS);
+}
+
+// ---- Klik & kolečko (jen PDF režim) ----------------------------------------
+function pdfNavActive() {
+  return !!pdfDoc && !document.body.classList.contains("live-active");
+}
+
+function onStageClick(e) {
+  if (!pdfNavActive()) return;
+  // Kliky na video overlay dál přepínají play/pause; navigaci nekradou.
+  if (e.target.closest && e.target.closest(".video-wrap")) return;
+  const rect = stageEl.getBoundingClientRect();
+  const frac = (e.clientX - rect.left) / rect.width;
+  if (frac <= 0.12) prev(); else next();
+}
+
+function onWheel(e) {
+  if (!pdfNavActive()) return;
+  const now = Date.now();
+  if (now - lastWheelAt < 300) return;
+  if (e.deltaY > 0) { lastWheelAt = now; next(); }
+  else if (e.deltaY < 0) { lastWheelAt = now; prev(); }
+}
+
+// ---- Banner „PDF má okraje" ------------------------------------------------
+function showMarginBanner() {
+  const banner = document.createElement("div");
+  banner.id = "margin-banner";
+  const text = document.createElement("span");
+  text.textContent =
+    "PDF má okraje kolem slajdů — vytvoř ho znovu průvodcem (automatický " +
+    "export), nebo v PowerPointu přes Uložit jako → PDF.";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.setAttribute("aria-label", "Zavřít upozornění");
+  close.textContent = "✕";
+  close.addEventListener("click", () => banner.remove());
+  banner.appendChild(text);
+  banner.appendChild(close);
+  stageEl.appendChild(banner);
+}
+
+async function checkPdfMargins() {
+  // Poměr stran stránky PDF vs. poměr slidu z configu (default 16:9),
+  // tolerance 2 %. Nesedí → PDF vzniklo tiskem (okraje papíru).
+  try {
+    const page1 = await pdfDoc.getPage(1);
+    const vp = page1.getViewport({ scale: 1 });
+    const actual = vp.width / vp.height;
+    const expected = (config && config.slideAspect) ? config.slideAspect : 16 / 9;
+    if (Math.abs(actual - expected) / expected > 0.02) showMarginBanner();
+  } catch (e) { /* diagnostika nesmí shodit render */ }
 }
 
 // ---- Inicializace ----------------------------------------------------------
@@ -294,9 +377,21 @@ export async function initSlides() {
   // slideCount z configu je informativní; skutečný počet stran bere z PDF.
   if (counterEl) counterEl.hidden = false;
 
+  // Levá kliková zóna (12 %) s jemným chevronem na hover.
+  const navZone = document.createElement("div");
+  navZone.id = "nav-zone-left";
+  const chevron = document.createElement("span");
+  chevron.textContent = "‹";
+  navZone.appendChild(chevron);
+  stageEl.appendChild(navZone);
+
+  stageEl.addEventListener("click", onStageClick);
+  stageEl.addEventListener("wheel", onWheel, { passive: true });
+
   buildVideoOverlays();
   await goTo(1);
   showTransient();
+  checkPdfMargins();
 
   console.log("[slides] připraveno:", pageCount, "stran,",
     (config.videos || []).length, "videí");

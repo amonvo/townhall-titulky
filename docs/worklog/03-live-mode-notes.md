@@ -93,3 +93,34 @@ Rozhodnutí při nejasnostech (ground rule 4: sensible default + poznámka, neza
   obrazovka + texty, Esc zpět, připojení streamu (video+srcObject, skrytý
   canvas/counter, pilulka ok), blokace navigace + toast, `+` funguje,
   ended overlay + tlačítka, návrat na panel.
+
+## Fáze 4 — PDF upgrady
+
+- prep.py: xfrm čtení vytaženo do `_pic_fractions()` (sdílí video i GIF větev).
+  GIF detekce: `<p:pic>` BEZ `<a:videoFile>`, jehož `<a:blip r:embed|r:link>`
+  vede přes `/image` relationship na `*.gif` (case-insensitive). Pozor na
+  postery videí: pic s videoFile se přeskakuje, takže GIF poster videa se
+  nespáruje omylem dvakrát. GIF scan běží i na slidech bez videí (původní
+  early-continue by ho přeskočil — opraveno restrukturalizací smyčky).
+- Config **v2**: `{version: 2, slideAspect, overlays: [{slide, type, file,
+  x,y,w,h}], videos: [legacy]}`. `slideAspect` (z sldSz) přidán nad rámec spec
+  — spec chce porovnávat „config slide aspect (default 16:9)" a prep tu
+  hodnotu zná přesně; app čte `config.slideAspect || 16/9`.
+- slides.js: jednotný overlay pipeline (`overlaysBySlide`, `kind: video|gif`);
+  čte `overlays`, jinak mapuje legacy `videos`. GIF = `<img>` v `.gif-wrap`
+  s `pointer-events: none` (kliky propadají navigaci), bez ovládání; šířka/
+  výška 100 % rámu (roztažení přesně na autorovaný obdélník). Mezerník bere
+  první VIDEO overlay (`firstActiveVideo`), ne libovolný overlay.
+- Klik/kolečko: jen PDF režim (`pdfDoc && !body.live-active`). Klik na stage =
+  další; levá zóna 12 % = zpět (chevron ‹, hover opacity .25, z-index pod
+  video overlayem); kliky z `.video-wrap` navigaci nekradou (closest check).
+  Kolečko: throttle 1 krok/300 ms — **rozhodnutí:** ignorovaný krok v okně
+  throttlu časovač NEresetuje (rychlé škrtnutí kolečkem = 1 krok, ne zámek).
+- Banner okrajů: po prvním renderu poměr stran stránky 1 vs. `slideAspect`
+  (tolerance 2 %) → dismissible banner (✕). Jednorázový = jednou za načtení
+  stránky (bez localStorage — po opravě PDF zmizí sám, jinak má připomínat).
+- **Ověření (Puppeteer): 14/14 asercí OK, 0 chyb v konzoli** — GIF overlay
+  geometrie (tolerance 2 px) + reposition po resize + pointer-events none,
+  klik vpravo/levá zóna, kolečko s throttlem, žádný banner u 16:9 fixture,
+  banner u A4 fixture + zavření. Self-test prep.py rozšířen na **19/19**
+  (config v2, gif extrakce, slideAspect, legacy klíč).

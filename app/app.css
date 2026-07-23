@@ -98,6 +98,83 @@ body {
   pointer-events: none;
 }
 
+/* ===== GIF overlay (animace, kterou PDF export ztratí) ===== */
+.gif-wrap {
+  position: absolute;
+  z-index: 14;
+  display: none;
+  pointer-events: none; /* kliky propadají na navigaci */
+}
+
+.slide-gif {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ===== Levá kliková zóna (12 % šířky, zpět) ===== */
+#nav-zone-left {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12%;
+  height: 100%;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 1.5vw;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+
+#nav-zone-left:hover { opacity: .25; }
+
+#nav-zone-left span {
+  font-size: 9vh;
+  color: #F5F7FA;
+  user-select: none;
+  line-height: 1;
+}
+
+body.live-active #nav-zone-left { display: none; }
+
+/* ===== Banner: PDF má okraje ===== */
+#margin-banner {
+  position: absolute;
+  top: 1.6vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 1.4vh;
+  max-width: 86%;
+  background: #10161F;
+  border: 1px solid #1E2833;
+  border-radius: 10px;
+  padding: 1.2vh 1.8vh;
+  color: #FFD966;
+  font-size: 1.7vh;
+  line-height: 1.45;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .5);
+}
+
+#margin-banner button {
+  font-family: inherit;
+  font-size: 1.7vh;
+  background: transparent;
+  border: 1px solid #2A3644;
+  border-radius: 6px;
+  color: #8B95A1;
+  padding: .3vh .9vh;
+  cursor: pointer;
+  flex: none;
+}
+
+#margin-banner button:hover { border-color: #3D4C5E; color: #F5F7FA; }
+
 /* ===== Setup message (chybí obsah) ===== */
 #setup-message {
   max-width: 60vh;
