@@ -413,6 +413,15 @@ body.live-active #nav-zone-left { display: none; }
   line-height: 1.45;
 }
 
+/* Jemná poznámka na PDF kartě, když zatím není nahraný obsah */
+.mode-card-note {
+  margin-top: .8vh;
+  font-size: 1.4vh;
+  color: #FFD966;
+}
+
+.mode-card-note.hidden { display: none; }
+
 .panel-buttons {
   display: flex;
   gap: 1.6vh;

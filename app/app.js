@@ -71,8 +71,20 @@ async function main() {
     getContentStatus: refreshContentStatus,
   });
 
-  // Wizard nahrání prezentace; po zavření se vrací start panel.
-  wizard = initWizard({ onClose: () => { if (panel) panel.show(); } });
+  // Chybí obsah pro PDF režim a server ho umí připravit? (Bez API — statický
+  // serve.ps1 nebo offline — wizard nepomůže; scéna ukazuje vlastní hlášku.)
+  const pdfContentMissing = () =>
+    contentStatus.hasApi && (!contentStatus.hasPdf || !contentStatus.hasConfig);
+
+  // Wizard nahrání prezentace; po zavření (úspěch reloaduje stránku sám,
+  // tohle je hlavně cesta „zrušit") se obnoví stav obsahu a vrátí panel.
+  // Žádné automatické znovuotevření — další otevření až na explicitní akci
+  // (klik na PDF kartu / start / tlačítko nahrání).
+  wizard = initWizard({
+    onClose: () => {
+      refreshContentStatus().finally(() => { if (panel) panel.show(); });
+    },
+  });
 
   // Živé zrcadlení PowerPointu (getDisplayMedia); zpět vede na start panel.
   const live = initLive({ onBackToPanel: () => { if (panel) panel.show(); } });
@@ -86,27 +98,36 @@ async function main() {
     onUpload: () => wizard.open(),
     onStartLive: () => live.start(),
     onMicDiag: () => micdiag.open(),
+    // Přepnutí na PDF kartu bez obsahu → rovnou wizard (explicitní akce).
+    onModeChange: (mode) => {
+      if (mode === "pdf" && pdfContentMissing()) openUploadWizard();
+    },
+    // Start v PDF režimu bez obsahu → wizard místo prázdné scény.
+    onBeforeStart: () => {
+      if (getMode() === "pdf" && pdfContentMissing()) {
+        openUploadWizard();
+        return true;
+      }
+      return false;
+    },
+    // Jemná poznámka na PDF kartě; ground truth je načtený obsah (funguje
+    // i proti statickému serveru, kde /api/content/status vrací 501).
+    isContentMissing: () => !(slides && slides.ok),
   });
 
   // Chybí/nekompletní obsah → místo start panelu rovnou wizard (drop zóna).
   // Jen v PDF režimu — živé zrcadlení žádný připravený obsah nepotřebuje.
   // Statický fallback server (serve.ps1) vrací pro /api/* 501 → wizard se
-  // neotvírá a panel zůstává (varování o obsahu ukazuje sám).
-  if (getMode() === "pdf") {
-    try {
-      const r = await fetch("api/content/status", { cache: "no-store" });
-      if (r.ok) {
-        const cs = await r.json();
-        if (!cs.hasPdf || !cs.hasConfig) {
-          panel.hide();
-          wizard.open({ skipConfirm: true });
-        }
-      }
-    } catch (e) { /* server bez API — panel zůstává */ }
-  }
+  // neotvírá a panel zůstává (poznámku o obsahu ukazuje PDF karta).
+  await refreshContentStatus();
+  if (getMode() === "pdf" && pdfContentMissing()) openUploadWizard();
 
   // Zpřístupníme pro ladění.
-  window.__townhall = { pdfjsVersion, slides, captions, panel, wizard, live, micdiag };
+  window.__townhall = {
+    pdfjsVersion, slides, captions, panel, wizard, live, micdiag,
+    refreshContentStatus,
+    getContentStatus: () => contentStatus,
+  };
 }
 
 if (document.readyState === "loading") {

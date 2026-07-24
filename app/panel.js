@@ -17,14 +17,20 @@ const APP_KEYS = new Set([
   "f", "F", "+", "=", "-", "_", "c", "C",
 ]);
 
-let overlayEl, subEl, warnsEl, msgEl, buttonsEl, cardsEl;
+let overlayEl, subEl, warnsEl, msgEl, buttonsEl, cardsEl, pdfNoteEl;
 let slidesApi = null;
 let captionsApi = null;
 let onUpload = null;    // otevře wizard nahrání prezentace (napojuje app.js)
 let onStartLive = null; // spustí flow živého zrcadlení (napojuje app.js)
 let onMicDiag = null;   // otevře diagnostiku mikrofonu (napojuje app.js)
 let onModeChange = null;
+let onBeforeStart = null;     // vrací true = start převzal app.js (např. wizard)
+let isContentMissing = null;  // chybí připravený obsah? (napojuje app.js)
 let visible = false;
+
+function contentMissing() {
+  return typeof isContentMissing === "function" && isContentMissing();
+}
 
 /* ---------- režim promítání (localStorage) ---------- */
 
@@ -110,6 +116,12 @@ function buildPanel() {
     s.textContent = def.sub;
     card.appendChild(t);
     card.appendChild(s);
+    if (def.mode === "pdf") {
+      // Jemná poznámka „Prezentace zatím nenahrána" — plní refreshCards().
+      pdfNoteEl = document.createElement("div");
+      pdfNoteEl.className = "mode-card-note hidden";
+      card.appendChild(pdfNoteEl);
+    }
     card.addEventListener("click", () => {
       setMode(def.mode);
       refreshCards();
@@ -161,7 +173,9 @@ function refreshSubtitle() {
     if (count) parts.push(czPluralSlides(count));
     subEl.textContent = parts.join(" · ") || "Prezentace připravena";
   } else {
-    subEl.textContent = "Obsah zatím není připraven";
+    // Chybějící obsah hlásí jemná poznámka na PDF kartě (refreshCards) —
+    // podtitulek nechává živý režim bez rušivých hlášek.
+    subEl.textContent = "";
   }
 }
 
@@ -171,6 +185,11 @@ function refreshCards() {
   [...cardsEl.children].forEach((card) => {
     card.classList.toggle("selected", card.dataset.mode === mode);
   });
+  if (pdfNoteEl) {
+    const missing = contentMissing();
+    pdfNoteEl.textContent = missing ? "Prezentace zatím nenahrána" : "";
+    pdfNoteEl.classList.toggle("hidden", !missing);
+  }
 }
 
 function refreshWarnings() {
@@ -185,10 +204,8 @@ function refreshWarnings() {
   if (location.protocol === "file:") {
     addWarn("Aplikace běží ze souboru (file://) — spusť ji přes start.bat, jinak nepůjde načíst obsah ani mikrofon.");
   }
-  // Chybějící obsah je problém jen v PDF režimu — živé zrcadlení ho nepotřebuje.
-  if (getMode() === "pdf" && (!slidesApi || !slidesApi.ok)) {
-    addWarn("Chybí prezentace — nahraj ji průvodcem (tlačítko Nahrát novou prezentaci).");
-  }
+  // Chybějící obsah nehlásí varování — řeší ho jemná poznámka na PDF kartě
+  // (refreshCards) a automatické otevření průvodce (app.js).
 }
 
 function appendMicDiagButton() {
@@ -213,6 +230,9 @@ function refreshButtons() {
     appendMicDiagButton();
   } else {
     const startBtn = makeButton("Spustit prezentaci s titulky", "primary", () => {
+      // PDF režim bez obsahu → místo prázdné scény převezme start app.js
+      // (otevře wizard); mikrofon se nespouští, po nahrání se stránka obnoví.
+      if (typeof onBeforeStart === "function" && onBeforeStart()) return;
       const ok = captionsApi.start();
       if (ok) {
         hide();
@@ -224,6 +244,7 @@ function refreshButtons() {
     if (!isSpeechSupported()) startBtn.disabled = true;
     buttonsEl.appendChild(startBtn);
     buttonsEl.appendChild(makeButton("Jen prezentace (bez titulků)", "ghost", () => {
+      if (typeof onBeforeStart === "function" && onBeforeStart()) return;
       hide();
       if (getMode() === "live" && typeof onStartLive === "function") onStartLive();
     }));
@@ -297,6 +318,8 @@ export function initPanel(opts) {
   onStartLive = opts.onStartLive || null;
   onMicDiag = opts.onMicDiag || null;
   onModeChange = opts.onModeChange || null;
+  onBeforeStart = opts.onBeforeStart || null;
+  isContentMissing = opts.isContentMissing || null;
   buildPanel();
   window.addEventListener("keydown", onKeyCapture, true);
   window.addEventListener("keydown", onKeyOpen);
