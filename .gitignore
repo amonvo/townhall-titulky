@@ -19,3 +19,6 @@ __pycache__/
 
 # Server PID (píše ho start.bat)
 .server.pid
+
+# Generováno při buildu exe (scripts/build-exe.ps1)
+scripts/version-info.txt

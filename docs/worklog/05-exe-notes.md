@@ -61,3 +61,32 @@ Rozhodnutí při nejasnostech (ground rule 3: default + poznámka, nezastavovat)
   7/7 asercí OK** — env endpoint, beaty drží server naživu 17 s (> timeout
   i grace), Edge UA ukazuje advisory (normální UA ne), 0 chyb v konzoli,
   po zavření prohlížeče server do ~8 s sám skončí.
+
+## Fáze 3 — ikona + build
+
+- Ikona dle zadání (navy zaoblený čtverec, bílý + žlutý pruh, červená linka;
+  supersampling 4× → LANCZOS; 7 velikostí 16–256). `assets/icon.ico` (15,6 kB)
+  commitnut jako zdrojové aktivum; make-icon bez `--force` přeskakuje.
+- `scripts/version-info.txt` se GENERUJE při buildu (FileVersion `1.0.0.N`,
+  N = `git rev-list --count HEAD`) → přidán do `.gitignore`, ať je working
+  tree po buildu čistý (spec chce dynamické build číslo, generovaný soubor
+  do gitu nepatří).
+- build-exe.ps1: pip install (jen build stroj) → ikona → version resource →
+  PyInstaller (`--onefile --noconsole`, absolutní `--add-data` cesty kvůli
+  `--specpath publish`, `--paths tools --hidden-import prep`, dist/work/spec
+  vše pod `publish/` = gitignorováno) → `publish/balik/` s českým
+  `README-uzivatel.txt` (UTF-8 BOM) → smoke test sestaveného exe (fail =
+  build fail). Skript uložen s UTF-8 BOM (PS 5.1 + česká literální data).
+- **Nalezená chyba (kritická pro exe):** `--noconsole` exe má
+  `sys.stderr = None` a výchozí `BaseHTTPRequestHandler.log_message` dělá
+  `sys.stderr.write` → KAŽDÝ request spadl AttributeError uprostřed odpovědi
+  (curl error 52, prázdná odpověď; smoke exit 1). Oprava: guard v našem
+  `log_message` (stderr None → nelogovat). `print()` je bezpečný (při
+  sys.stdout None tiše nic nedělá).
+- Poučka: PyInstaller onefile = bootloader parent + child proces; kill
+  parenta nechá child žít. V ostrém provozu ukončuje child watchdog
+  (`os._exit`) a parent skončí s ním — netýká se uživatelů, jen testů.
+- **Ověření:** build end-to-end OK, exe 9,3 MB, smoke test OK; ruční probe
+  zmrazeného exe: `GET /` 200 (statika z _MEIPASS), `.js` se správným MIME,
+  `/api/env` `{frozen:true}`, `content/` se vytváří vedle exe, version
+  resource `1.0.0.21 / Townhall Titulky` v Properties souboru.

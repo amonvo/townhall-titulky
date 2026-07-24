@@ -201,6 +201,26 @@ Nahrazuje se na hranicích slov (bez ohledu na velikost písmen) ještě **před
 zobrazením i překladem, takže oprava se propíše do češtiny, angličtiny
 i ukrajinštiny.
 
+## Sestavení exe
+
+Jednosouborová distribuce pro operátora (`TownhallTitulky.exe` — dvojklik
+a vše běží, bez Pythonu a bez start.bat):
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\build-exe.ps1
+```
+
+Skript nainstaluje build závislosti (pyinstaller, pillow — jen na build
+stroji), vygeneruje ikonu a version resource, sestaví
+`publish/TownhallTitulky.exe` (PyInstaller onefile, bez konzole), složí
+`publish/balik/` (exe + `README-uzivatel.txt`) a na závěr spustí smoke test
+sestaveného exe. Distribuce: **zazipuj složku `publish/balik` ručně** —
+binárky nikdy nepatří do gitu (`publish/` je ignorováno).
+
+Exe spouští systémový Chrome (fallback Edge) v `--app` okně; data
+(`content/`) žijí vedle exe. Zavření okna aplikace ukončí i server
+(heartbeat watchdog, do ~1 minuty).
+
 ## Struktura projektu
 
 ```

@@ -282,6 +282,10 @@ def _run_prepare_job(deck_name):
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
+        # Zmrazený --noconsole exe nemá stderr — výchozí log_message dělá
+        # sys.stderr.write a shodil by KAŽDÝ request (AttributeError).
+        if sys.stderr is None:
+            return
         # tišší log (API status poll každých 500 ms by zaplavil konzoli)
         if ("/api/prepare/status" in (self.path or "")
                 or "/api/heartbeat" in (self.path or "")):
