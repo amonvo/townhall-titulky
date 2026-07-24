@@ -42,3 +42,22 @@ Rozhodnutí při nejasnostech (ground rule 3: default + poznámka, nezastavovat)
   Sanity Puppeteer (panel 14/14, pdfmode 14/14) po přepisu translate_path OK.
   Mimochodem: česká chybová hláška PowerPoint COM se nyní dekóduje správně
   (fix kódování stderr z promptu 2 potvrzen v terénu).
+
+## Fáze 2 — heartbeat klient + Edge advisory
+
+- `GET /api/env` → `{frozen, autoExit}`. app.js beaty POSTuje každých 5 s
+  (`keepalive: true`, chyby ignorovány — výpadek řeší watchdog, ne UI).
+- **Nalezená past (opraveno):** heartbeat blok původně běžel až po
+  `await initSlides()` — načtení velkého PDF by mohlo spotřebovat grace okno
+  a watchdog by server zabil uprostřed prvního renderu. Beaty teď startují
+  HNED na začátku `main()`, nezávisle na zbytku inicializace (fire-and-forget
+  promise chain, žádné await).
+- Edge advisory: `Edg/` v UA → specifická hláška („Běžíš v Edge…") místo
+  obecného varování o Chromu; Edge SR má, jen méně spolehlivě.
+- **Poučka do testů:** `networkidle0` se s periodickými heartbeaty (a range
+  požadavky pdf.js) nikdy neustálí → heartbeat suite používá
+  `waitUntil: "load"` + čekání na `__townhall`.
+- **Ověření (Puppeteer + reálný auto-exit server, timeout 8 s / grace 15 s):
+  7/7 asercí OK** — env endpoint, beaty drží server naživu 17 s (> timeout
+  i grace), Edge UA ukazuje advisory (normální UA ne), 0 chyb v konzoli,
+  po zavření prohlížeče server do ~8 s sám skončí.

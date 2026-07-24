@@ -16,6 +16,22 @@ console.log("[townhall-titulky] pdf.js verze:", pdfjsVersion);
 async function main() {
   let panel = null;
 
+  // Exe režim (auto-exit server): heartbeat každých 5 s drží server naživu;
+  // zavření okna beaty zastaví a watchdog serveru proces ukončí. Startuje
+  // HNED (před načítáním PDF) — pomalý první render nesmí spotřebovat grace.
+  fetch("api/env", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((env) => {
+      if (!env || !env.autoExit) return;
+      const beat = () => {
+        fetch("api/heartbeat", { method: "POST", keepalive: true })
+          .catch(() => { /* výpadek beatů řeší watchdog, ne UI */ });
+      };
+      beat();
+      setInterval(beat, 5000);
+    })
+    .catch(() => { /* server bez API (serve.ps1) — žádné beaty */ });
+
   // Titulkovací engine (staví UI v pásu #captions, +/- a C klávesy, status pills).
   // Mikrofon se NEspouští automaticky — spouští ho start panel.
   const captions = initCaptions({

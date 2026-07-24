@@ -175,7 +175,11 @@ function refreshCards() {
 
 function refreshWarnings() {
   warnsEl.textContent = "";
-  if (!isLikelyChrome() || !isSpeechSupported()) {
+  if (/Edg\//.test(navigator.userAgent)) {
+    // Edge řeč umí, ale méně spolehlivě — exe ho používá jen jako fallback.
+    addWarn("Běžíš v Edge — rozpoznávání řeči je nejspolehlivější v Google Chrome. " +
+      "Pokud titulky nefungují, nainstaluj/použij Chrome.");
+  } else if (!isLikelyChrome() || !isSpeechSupported()) {
     addWarn("Rozpoznávání řeči vyžaduje Google Chrome — v tomto prohlížeči titulky nepoběží.");
   }
   if (location.protocol === "file:") {

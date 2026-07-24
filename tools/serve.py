@@ -448,6 +448,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/content/status":
             self._api_content_status()
             return
+        if self.path == "/api/env":
+            self._send_json(200, {"frozen": FROZEN, "autoExit": AUTO_EXIT})
+            return
         if self.path.startswith("/api/"):
             self._send_json(404, {"error": "Neznámý API endpoint."})
             return
