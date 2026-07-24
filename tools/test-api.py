@@ -257,6 +257,62 @@ def main():
         except OSError as e:
             check(False, "chunked test selhal na socketu (%s)" % e)
 
+        # 12) heartbeat endpoint
+        st, data = post("/api/heartbeat", body=b"")
+        check(st == 200 and data.get("ok") is True, "POST /api/heartbeat → 200 {ok}")
+
+        # 13) --smoke v dev režimu → exit 0
+        serve_py = os.path.join(ROOT, "tools", "serve.py")
+        r = subprocess.run([sys.executable, serve_py, "--smoke", "--port", "8198"],
+                           capture_output=True, timeout=60, cwd=ROOT)
+        check(r.returncode == 0, "--smoke → exit 0 (self-GET / a content/status)")
+
+        # 14) watchdog: bez heartbeatů proces skončí po grace periodě
+        wd_env = dict(os.environ, TOWNHALL_HB_TIMEOUT="2", TOWNHALL_HB_GRACE="2")
+        p1 = subprocess.Popen([sys.executable, serve_py, "--auto-exit",
+                               "--port", "8198"],
+                              env=wd_env, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL, cwd=ROOT)
+        time.sleep(1.0)
+        alive_early = p1.poll() is None
+        try:
+            p1.wait(timeout=10)
+            exited = True
+        except subprocess.TimeoutExpired:
+            exited = False
+            p1.kill()
+        check(alive_early and exited,
+              "watchdog: žije v grace periodě, bez heartbeatů pak končí")
+
+        # 15) heartbeaty drží proces naživu; po jejich konci umírá
+        p2 = subprocess.Popen([sys.executable, serve_py, "--auto-exit",
+                               "--port", "8198"],
+                              env=wd_env, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL, cwd=ROOT)
+        try:
+            check(wait_port(8198, timeout=10), "watchdog server nastartoval")
+            beats_end = time.time() + 4.5   # > grace (2 s) → bez beatů by umřel
+            while time.time() < beats_end:
+                try:
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:8198/api/heartbeat",
+                        data=b"", method="POST")
+                    urllib.request.urlopen(req, timeout=5).read()
+                except OSError:
+                    pass
+                time.sleep(1.0)
+            alive_with_beats = p2.poll() is None
+            check(alive_with_beats, "heartbeaty (1 s) drží proces naživu > grace")
+            try:
+                p2.wait(timeout=10)
+                died_after = True
+            except subprocess.TimeoutExpired:
+                died_after = False
+            check(died_after, "po konci heartbeatů proces do ~2 s končí")
+        finally:
+            if p2.poll() is None:
+                p2.kill()
+
     finally:
         server.terminate()
         try:

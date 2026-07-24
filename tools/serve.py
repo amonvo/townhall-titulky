@@ -21,12 +21,17 @@ jako metadata (deckName).
 Použití:  python tools/serve.py [port]   (default 8137)
 """
 
+import argparse
 import json
 import os
+import posixpath
 import re
 import subprocess
 import sys
 import threading
+import time
+import urllib.parse
+import urllib.request
 import uuid
 import http.server
 import socketserver
@@ -35,10 +40,29 @@ import socketserver
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import prep  # noqa: E402
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8137
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CONTENT_DIR = os.path.join(ROOT, "content")
-EXPORT_PS1 = os.path.join(ROOT, "tools", "export-pdf.ps1")
+# ---- Kořeny (dev vs. zmrazený exe) -----------------------------------------
+# APP_ROOT  = statická aplikace (index.html, app/, vendor/, tools/*.ps1):
+#             v dev repo root, ve zmrazeném exe rozbalený bundle (_MEIPASS).
+# DATA_ROOT = měnitelná data (content/): v dev repo root, ve zmrazeném exe
+#             SLOŽKA VEDLE EXE — uživatelská data nikdy nežijí uvnitř bundlu.
+FROZEN = bool(getattr(sys, "frozen", False))
+if FROZEN:
+    APP_ROOT = sys._MEIPASS  # noqa: SLF001 — PyInstaller runtime
+    DATA_ROOT = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    DATA_ROOT = APP_ROOT
+
+CONTENT_DIR = os.path.join(DATA_ROOT, "content")
+EXPORT_PS1 = os.path.join(APP_ROOT, "tools", "export-pdf.ps1")
+
+# Watchdog (exe lifecycle): intervaly lze pro testy zkrátit env proměnnými.
+HEARTBEAT_TIMEOUT = float(os.environ.get("TOWNHALL_HB_TIMEOUT", "60"))
+STARTUP_GRACE = float(os.environ.get("TOWNHALL_HB_GRACE", "120"))
+
+AUTO_EXIT = False
+_last_heartbeat = None          # None = zatím žádný heartbeat
+_started_at = time.time()
 
 MAX_UPLOAD = 2 * 1024 ** 3          # 2 GB
 PDF_EXPORT_TIMEOUT = 300            # s — velké decky konvertují dlouho
@@ -257,13 +281,22 @@ def _run_prepare_job(deck_name):
 # ---- HTTP handler -----------------------------------------------------------
 
 class Handler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=ROOT, **kwargs)
-
     def log_message(self, fmt, *args):
         # tišší log (API status poll každých 500 ms by zaplavil konzoli)
-        if "/api/prepare/status" not in (self.path or ""):
-            super().log_message(fmt, *args)
+        if ("/api/prepare/status" in (self.path or "")
+                or "/api/heartbeat" in (self.path or "")):
+            return
+        super().log_message(fmt, *args)
+
+    def translate_path(self, path):
+        # Routing kořenů: /content/* → DATA_ROOT (vedle exe), vše ostatní
+        # → APP_ROOT (statická aplikace, ve zmrazeném exe _MEIPASS).
+        path = path.split("?", 1)[0].split("#", 1)[0]
+        path = urllib.parse.unquote(path)
+        path = posixpath.normpath(path)
+        parts = [p for p in path.split("/") if p and p not in (".", "..")]
+        root = DATA_ROOT if parts and parts[0] == "content" else APP_ROOT
+        return os.path.join(root, *parts)
 
     def guess_type(self, path):
         ext = os.path.splitext(path)[1].lower()
@@ -394,6 +427,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/prepare":
             self._api_prepare()
+        elif self.path == "/api/heartbeat":
+            global _last_heartbeat
+            _last_heartbeat = time.time()
+            # tělo (pokud nějaké je) zahodíme
+            cl = int(self.headers.get("Content-Length") or 0)
+            if cl:
+                try:
+                    self.rfile.read(min(cl, 4096))
+                except OSError:
+                    pass
+            self._send_json(200, {"ok": True})
         else:
             self._send_json(404, {"error": "Neznámý API endpoint."})
 
@@ -472,19 +516,181 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 class ThreadingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
-    allow_reuse_address = True
+    allow_reuse_address = False   # obsazený port = běžící instance (viz main)
 
 
-def main():
-    os.chdir(ROOT)
+# ---- Watchdog (exe lifecycle) ----------------------------------------------
+
+def _watchdog():
+    """
+    Ukončí proces, když aplikace v prohlížeči přestane posílat heartbeaty
+    (zavřené okno). Po startu platí delší grace perioda — pomalé první
+    spuštění prohlížeče nesmí server zabít.
+    """
+    while True:
+        time.sleep(min(1.0, HEARTBEAT_TIMEOUT / 4))
+        now = time.time()
+        if _last_heartbeat is None:
+            deadline = _started_at + STARTUP_GRACE
+        else:
+            deadline = _last_heartbeat + HEARTBEAT_TIMEOUT
+        if now > deadline:
+            print("serve.py: žádný heartbeat — končím.")
+            os._exit(0)
+
+
+# ---- Prohlížeč (Chrome → Edge → chybová hláška) ----------------------------
+
+def _registry_app_path(exe_name):
+    try:
+        import winreg
+    except ImportError:
+        return None
+    key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\%s" % exe_name
+    for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        try:
+            with winreg.OpenKey(hive, key_path) as k:
+                val, _ = winreg.QueryValueEx(k, None)
+                if val and os.path.isfile(val):
+                    return val
+        except OSError:
+            continue
+    return None
+
+
+def find_browser():
+    """Vrátí (cesta, 'chrome'|'edge') nebo (None, None)."""
+    pf = os.environ.get("ProgramFiles", r"C:\Program Files")
+    pf86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+    lad = os.environ.get("LocalAppData", "")
+    chrome_candidates = [
+        os.path.join(pf, "Google", "Chrome", "Application", "chrome.exe"),
+        os.path.join(pf86, "Google", "Chrome", "Application", "chrome.exe"),
+        os.path.join(lad, "Google", "Chrome", "Application", "chrome.exe"),
+    ]
+    for c in chrome_candidates:
+        if c and os.path.isfile(c):
+            return c, "chrome"
+    reg = _registry_app_path("chrome.exe")
+    if reg:
+        return reg, "chrome"
+    edge_candidates = [
+        os.path.join(pf86, "Microsoft", "Edge", "Application", "msedge.exe"),
+        os.path.join(pf, "Microsoft", "Edge", "Application", "msedge.exe"),
+    ]
+    for c in edge_candidates:
+        if c and os.path.isfile(c):
+            return c, "edge"
+    reg = _registry_app_path("msedge.exe")
+    if reg:
+        return reg, "edge"
+    return None, None
+
+
+def launch_browser(port):
+    """Otevře aplikaci v chromeless --app okně. Vrací True při úspěchu."""
+    path, kind = find_browser()
+    if not path:
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(
+                None,
+                "Nenašel jsem Google Chrome ani Microsoft Edge.\n\n"
+                "Nainstaluj prosím Google Chrome (rozpoznávání řeči funguje "
+                "nejlépe v něm) a spusť aplikaci znovu.",
+                "Townhall Titulky", 0x10)  # MB_ICONERROR
+        except Exception:  # noqa: BLE001 — bez GUI aspoň log
+            print("CHYBA: Chrome ani Edge nenalezen.")
+        return False
+    subprocess.Popen([path, "--app=http://localhost:%d" % port, "--new-window"])
+    if kind == "edge":
+        print("serve.py: Chrome nenalezen, otevírám Edge (kompatibilní, "
+              "ale řeč je nejspolehlivější v Chromu).")
+    return True
+
+
+# ---- Smoke test (ověření buildu) -------------------------------------------
+
+def run_smoke(port):
+    """Nastartuje server, self-GET / a /api/content/status, vypíše OK, exit 0."""
+    httpd = ThreadingServer(("127.0.0.1", port), Handler)
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        for url_path in ("/", "/api/content/status"):
+            with urllib.request.urlopen(
+                    "http://127.0.0.1:%d%s" % (port, url_path), timeout=10) as r:
+                if r.status != 200:
+                    print("SMOKE FAIL: %s -> %d" % (url_path, r.status))
+                    return 1
+                body = r.read()
+                if not body:
+                    print("SMOKE FAIL: %s prázdná odpověď" % url_path)
+                    return 1
+        print("SMOKE OK")
+        return 0
+    except Exception as e:  # noqa: BLE001
+        print("SMOKE FAIL: %s" % e)
+        return 1
+    finally:
+        httpd.shutdown()
+
+
+# ---- Vstupní bod ------------------------------------------------------------
+
+def main(argv=None):
+    global AUTO_EXIT
+
+    ap = argparse.ArgumentParser(description="Lokální server townhall-titulky.")
+    ap.add_argument("port_pos", nargs="?", type=int,
+                    help="port (poziční, kompatibilita se start.bat)")
+    ap.add_argument("--port", type=int, default=None)
+    ap.add_argument("--auto-exit", action="store_true",
+                    help="ukončit proces bez heartbeatů (používá exe)")
+    ap.add_argument("--no-browser", action="store_true")
+    ap.add_argument("--smoke", action="store_true",
+                    help="self-test serveru (build verifikace), exit 0 při OK")
+    args = ap.parse_args(argv)
+
+    port = args.port or args.port_pos or 8137
+
+    # Dvojklik na zmrazený exe (žádné argumenty) = plný „aplikační" režim.
+    frozen_default = FROZEN and (argv is None and len(sys.argv) == 1)
+    auto_exit = args.auto_exit or frozen_default
+    want_browser = (frozen_default or FROZEN) and not args.no_browser and not args.smoke
+
+    if args.smoke:
+        return run_smoke(port)
+
+    os.makedirs(CONTENT_DIR, exist_ok=True)
+    os.chdir(DATA_ROOT)
+
     # Bezpečnost: pouze loopback — nikdy nevystavovat do sítě.
-    with ThreadingServer(("127.0.0.1", PORT), Handler) as httpd:
-        print("serve.py: naslouchám na http://localhost:%d (kořen: %s)" % (PORT, ROOT))
+    try:
+        httpd = ThreadingServer(("127.0.0.1", port), Handler)
+    except OSError:
+        # Port obsazený → běžící instance; jen otevři další okno a skonči.
+        print("serve.py: port %d už obsluhuje běžící instance." % port)
+        if want_browser:
+            launch_browser(port)
+        return 0
+
+    if auto_exit:
+        AUTO_EXIT = True
+        threading.Thread(target=_watchdog, daemon=True).start()
+
+    if want_browser:
+        launch_browser(port)
+
+    with httpd:
+        print("serve.py: naslouchám na http://localhost:%d (app: %s, data: %s)"
+              % (port, APP_ROOT, DATA_ROOT))
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
             pass
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
