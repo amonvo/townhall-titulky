@@ -5,6 +5,18 @@ nimi zobrazuje **živé titulky** překládané z češtiny do angličtiny a ukr
 Vše běží lokálně v Google Chrome na Windows notebooku — bez API klíčů, bez účtů,
 zdarma.
 
+## Rychlý start (operátor)
+
+**Dvojklik na `TownhallTitulky.exe`** (z dodaného zipu / `publish/balik`) —
+otevře se okno aplikace a o vše ostatní se postará samo. Žádný Python, žádné
+instalace; při prvním spuštění projdi SmartScreen (`Více informací → Přesto
+spustit`). Nahrané prezentace se ukládají do složky `content` **vedle exe**;
+ukončení = zavřít okno aplikace (server se do ~1 minuty vypne sám).
+
+Vývojová cesta (`start.bat` + Python, práce s repozitářem) zůstává popsaná
+níže; kroky s `start.bat` v tomto README platí pro exe stejně — jen místo
+`start.bat` spusť exe.
+
 ## Dva režimy promítání
 
 | | **Živý PowerPoint (doporučeno)** | **PDF režim (záloha)** |
@@ -40,8 +52,10 @@ zdarma.
 - Internet v sále (překladové endpointy jsou jediná síťová komunikace)
 - Mikrofonní vstup z mixážního pultu nastavený jako **výchozí** vstupní zařízení
   ve Windows (Nastavení → Systém → Zvuk → Vstup)
-- Python 3 (pro `tools/prep.py` a lokální server); bez Pythonu se server spustí
-  přes PowerShell (`tools/serve.ps1`), ale `prep.py` Python potřebuje
+- Pro **exe** nic dalšího (Edge poslouží jako nouzový fallback prohlížeče).
+  Pro vývojovou cestu: Python 3 (`tools/prep.py` a lokální server); bez
+  Pythonu se server spustí přes PowerShell (`tools/serve.ps1`), ale `prep.py`
+  Python potřebuje
 
 ## Příprava prezentace (PDF režim)
 

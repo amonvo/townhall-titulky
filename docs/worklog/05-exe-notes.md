@@ -90,3 +90,18 @@ Rozhodnutí při nejasnostech (ground rule 3: default + poznámka, nezastavovat)
   zmrazeného exe: `GET /` 200 (statika z _MEIPASS), `.js` se správným MIME,
   `/api/env` `{frozen:true}`, `content/` se vytváří vedle exe, version
   resource `1.0.0.21 / Townhall Titulky` v Properties souboru.
+
+## Fáze 4 — baterie + docs
+
+- README: nová sekce „Rychlý start (operátor)" — dvojklik na exe vede;
+  poznámka, že kroky se `start.bat` platí pro exe stejně. Požadavky:
+  exe nepotřebuje Python (jen dev cesta). start.bat zůstává dev cestou.
+- **Závěrečná baterie (vše exit 0):** `node --check` 8 modulů · prep
+  self-test 19/19 · test-api **27/27** (vč. heartbeat/watchdog/smoke) ·
+  Puppeteer 9 suit: panel 14/14, wizard 12/12, captions 16/16, modes 11/11,
+  live 14/14, pdfmode 14/14, miclife 14/14, micdiag 16/16, heartbeat 7/7.
+  Rebuild exe z čistého `publish/`: build OK, smoke OK, exe 9,8 MB
+  (FileVersion 1.0.0.22), `publish/balik` s README-uzivatel.txt.
+  `git status` čistý (publish/ i version-info.txt ignorovány).
+- Screenshoty, SmartScreen průchod a test na stroji mimo repo jsou na
+  operátorovi (sekce VERIFY promptu — „do not execute").
