@@ -62,3 +62,42 @@
   nepotřebuje). Default + poznámka.
 - `window.__townhall` nově vystavuje `refreshContentStatus` a
   `getContentStatus()` pro testy.
+
+## Fáze 3 — testy: cesta čistého stroje
+
+- Puppeteer suity z promptů 1–5 žily jen v session scratchpadu (viz paměť
+  „browser-verification-setup") a nejsou k dispozici — sada se postavila znovu
+  a tentokrát se **commituje do `tests/`**, ať přežije session (default +
+  poznámka; odpovídá to i předepsané commit zprávě `test: fresh-machine
+  suite`). Spuštění viz hlavička `tests/run-tests.js` (puppeteer-core +
+  systémový Chrome, `npm i puppeteer-core --no-save`).
+- Nový test hook v `tools/serve.py`: env `TOWNHALL_DATA_ROOT` přesměruje
+  `content/` do libovolného adresáře. Testy tak simulují čistý stroj
+  (prázdný temp DATA_ROOT) i připravený obsah, aniž by sáhly na operátorův
+  `content/` (reálný deck). Izolované porty 8151/8152 (operátorův 8137
+  nedotčen).
+- Fixture `tests/make_fixture.py`: `data-fresh/` (prázdný kořen) a
+  `data-prepared/` (ručně sestavené minimální dvoustránkové 16:9 PDF +
+  `config.json` s deckName „Test Deck") — bez závislosti na PowerPointu.
+  Fixtures + node_modules jsou gitignorované.
+- Suity a výsledky (celkem **38/38 OK**):
+  - `fresh-machine` (18): default live → panel bez staré hlášky; PDF karta →
+    wizard (drop); zrušení → panel + poznámka „Prezentace zatím nenahrána",
+    žádná reopen smyčka (kontrola 700 ms); oba starty → wizard znovu (mikrofon
+    se nespouští); prázdný stav scény s tlačítkem `Nahrát prezentaci` →
+    wizard; `tools/`/`prep.py` nikde v `body.innerText`; 0 chyb v konzoli.
+  - `static-501` (9): interceptem vynucené 501 pro `/api/*` (simulace
+    `serve.ps1`) — wizard se nikdy neotvírá, empty state ukazuje variantu
+    `TownhallTitulky.exe / start.bat` bez tlačítka, start schová panel do
+    scény s hláškou.
+  - `pdfmode sanity` (11): připravený obsah — wizard se neotvírá, podtitulek
+    `Test Deck · 2 slajdy`, poznámka skrytá, navigace šipkami, Esc vrací
+    panel.
+- Konzole: síťové logy `Failed to load resource: 404/501` jsou na čistém
+  stroji očekávané (chybějící content, API bez podpory) a filtrují se;
+  `pageerror` a ostatní console.error musí být nula.
+- Baterie: `py tools/prep.py --self-test` OK, `py tools/test-api.py` OK
+  (všechny asercie), `node --check` všech `app/*.js` OK.
+- `.gitignore` doplněn o `tests/data-*` fixtures a `package.json`/`lock`
+  (projekt je záměrně bez runtime npm závislostí; zabrání náhodnému commitu
+  při `npm i` bez `--no-save`).

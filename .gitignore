@@ -8,6 +8,12 @@ publish/
 
 # Node
 node_modules/
+package.json
+package-lock.json
+
+# Testovací fixtures (generuje tests/make_fixture.py)
+tests/data-fresh/
+tests/data-prepared/
 
 # OS / editor smetí
 .DS_Store

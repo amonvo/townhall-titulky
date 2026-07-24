@@ -53,6 +53,12 @@ else:
     APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     DATA_ROOT = APP_ROOT
 
+# Testovací hook: TOWNHALL_DATA_ROOT přesměruje content/ jinam (např. prázdný
+# temp adresář = simulace čistého stroje) bez dotčení operátorových dat.
+_env_data_root = os.environ.get("TOWNHALL_DATA_ROOT")
+if _env_data_root:
+    DATA_ROOT = os.path.abspath(_env_data_root)
+
 CONTENT_DIR = os.path.join(DATA_ROOT, "content")
 EXPORT_PS1 = os.path.join(APP_ROOT, "tools", "export-pdf.ps1")
 
