@@ -13,8 +13,36 @@ import { initMicDiag } from "./micdiag.js";
 
 console.log("[townhall-titulky] pdf.js verze:", pdfjsVersion);
 
+// Poslední známý stav obsahu na serveru. hasApi=false = statický fallback
+// server (serve.ps1 vrací pro /api/* 501) nebo server nedostupný — wizard
+// tam nemá jak připravit obsah, otvírat ho nemá smysl.
+let contentStatus = { hasApi: false, hasPdf: false, hasConfig: false };
+
+async function refreshContentStatus() {
+  try {
+    const r = await fetch("api/content/status", { cache: "no-store" });
+    if (r.ok) {
+      const cs = await r.json();
+      contentStatus = Object.assign(
+        { hasApi: true, hasPdf: false, hasConfig: false }, cs);
+    } else {
+      contentStatus = { hasApi: false, hasPdf: false, hasConfig: false };
+    }
+  } catch (e) {
+    contentStatus = { hasApi: false, hasPdf: false, hasConfig: false };
+  }
+  return contentStatus;
+}
+
 async function main() {
   let panel = null;
+  let wizard = null;
+
+  // Otevře wizard rovnou na drop zóně (bez potvrzování přepisu — obsah chybí).
+  const openUploadWizard = () => {
+    if (panel) panel.hide();
+    if (wizard) wizard.open({ skipConfirm: true });
+  };
 
   // Exe režim (auto-exit server): heartbeat každých 5 s drží server naživu;
   // zavření okna beaty zastaví a watchdog serveru proces ukončí. Startuje
@@ -38,10 +66,13 @@ async function main() {
     onMicDenied: (msg) => { if (panel) panel.showMessage(msg); },
   });
 
-  const slides = await initSlides();
+  const slides = await initSlides({
+    onRequestUpload: openUploadWizard,
+    getContentStatus: refreshContentStatus,
+  });
 
   // Wizard nahrání prezentace; po zavření se vrací start panel.
-  const wizard = initWizard({ onClose: () => { if (panel) panel.show(); } });
+  wizard = initWizard({ onClose: () => { if (panel) panel.show(); } });
 
   // Živé zrcadlení PowerPointu (getDisplayMedia); zpět vede na start panel.
   const live = initLive({ onBackToPanel: () => { if (panel) panel.show(); } });

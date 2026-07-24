@@ -187,7 +187,7 @@ function refreshWarnings() {
   }
   // Chybějící obsah je problém jen v PDF režimu — živé zrcadlení ho nepotřebuje.
   if (getMode() === "pdf" && (!slidesApi || !slidesApi.ok)) {
-    addWarn("Chybí obsah — nahraj prezentaci průvodcem, nebo spusť tools/prep.py (viz README).");
+    addWarn("Chybí prezentace — nahraj ji průvodcem (tlačítko Nahrát novou prezentaci).");
   }
 }
 

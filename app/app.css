@@ -176,24 +176,28 @@ body.live-active #nav-zone-left { display: none; }
 #margin-banner button:hover { border-color: #3D4C5E; color: #F5F7FA; }
 
 /* ===== Setup message (chybí obsah) ===== */
-#setup-message {
-  max-width: 60vh;
+/* Prázdný stav (chybí prezentace) — uživatelský, žádné vývojářské cesty */
+#empty-state {
+  max-width: 70vh;
   text-align: center;
-  font-size: 2.4vh;
+  padding: 4vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2vh;
+}
+
+#empty-state .empty-title {
+  color: #F5F7FA;
+  font-size: 3.4vh;
+  font-weight: 600;
+}
+
+#empty-state .empty-text {
+  margin: 0;
+  font-size: 2.2vh;
   line-height: 1.5;
   color: #8B95A1;
-  padding: 4vh;
-}
-
-#setup-message code {
-  color: #FFD966;
-  font-family: "Consolas", "Courier New", monospace;
-  font-size: .9em;
-}
-
-#setup-message strong {
-  color: #F5F7FA;
-  font-size: 3vh;
 }
 
 /* ===== Caption band (dolní 22vh) ===== */

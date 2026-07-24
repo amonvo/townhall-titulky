@@ -19,6 +19,8 @@ let renderToken = 0;       // ruší zastaralé async rendery
 let resizeTimer = null;
 
 let stageEl, canvasEl, counterEl;
+let onRequestUpload = null;   // otevře wizard nahrání (napojuje app.js)
+let getContentStatus = null;  // dotaz na server API (napojuje app.js)
 // overlaye (video + gif): mapa "číslo slajdu" -> pole { entry, wrap, kind, video?, badge? }
 const overlaysBySlide = new Map();
 let activeOverlays = [];   // overlay prvky aktuálního slajdu
@@ -54,16 +56,53 @@ async function loadPdf(pdfName) {
   return task.promise;
 }
 
-function showSetupMessage() {
-  // Přátelská CZ hláška místo rozbité aplikace.
-  const msg = document.createElement("div");
-  msg.id = "setup-message";
-  msg.innerHTML =
-    "<strong>Chybí obsah</strong><br>" +
-    "Spusť <code>tools/prep.py</code> (viz README) a vlož " +
-    "<code>content/slides.pdf</code>.";
+// Prázdný stav pro koncového uživatele (exe distribuce nemá repo ani tools/):
+// se serverovým API nabídne rovnou nahrání, bez API (statický fallback
+// serve.ps1) vysvětlí, čím aplikaci spustit.
+function showEmptyState(hasApi) {
   if (canvasEl) canvasEl.style.display = "none";
-  stageEl.appendChild(msg);
+  const old = document.getElementById("empty-state");
+  if (old) old.remove();
+
+  const box = document.createElement("div");
+  box.id = "empty-state";
+
+  const title = document.createElement("div");
+  title.className = "empty-title";
+  title.textContent = "Chybí prezentace";
+  box.appendChild(title);
+
+  const text = document.createElement("p");
+  text.className = "empty-text";
+  text.textContent = hasApi
+    ? "Nahraj soubor .pptx a aplikace si ji připraví sama."
+    : "Prezentace není připravena. Spusť aplikaci přes TownhallTitulky.exe " +
+      "nebo start.bat (server s přípravou obsahu).";
+  box.appendChild(text);
+
+  if (hasApi) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "empty-upload-btn";
+    btn.className = "panel-btn primary";
+    btn.textContent = "Nahrát prezentaci";
+    btn.addEventListener("click", () => {
+      if (typeof onRequestUpload === "function") onRequestUpload();
+    });
+    box.appendChild(btn);
+  }
+
+  stageEl.appendChild(box);
+}
+
+async function showMissingContent() {
+  let hasApi = false;
+  if (typeof getContentStatus === "function") {
+    try {
+      hasApi = !!(await getContentStatus()).hasApi;
+    } catch (e) { /* server nedostupný → varianta bez API */ }
+  }
+  showEmptyState(hasApi);
 }
 
 // ---- Vykreslení slajdu -----------------------------------------------------
@@ -345,7 +384,11 @@ async function checkPdfMargins() {
 }
 
 // ---- Inicializace ----------------------------------------------------------
-export async function initSlides() {
+export async function initSlides(opts) {
+  opts = opts || {};
+  onRequestUpload = opts.onRequestUpload || null;
+  getContentStatus = opts.getContentStatus || null;
+
   stageEl = document.getElementById("stage");
   canvasEl = document.getElementById("slide-canvas");
   counterEl = document.getElementById("slide-counter");
@@ -361,7 +404,7 @@ export async function initSlides() {
     config = await loadConfig();
   } catch (e) {
     console.warn("[slides] config.json se nepodařilo načíst:", e.message);
-    showSetupMessage();
+    await showMissingContent();
     return { ok: false, config: null };
   }
 
@@ -369,7 +412,7 @@ export async function initSlides() {
     pdfDoc = await loadPdf(config.pdf);
   } catch (e) {
     console.warn("[slides] PDF se nepodařilo načíst:", e.message);
-    showSetupMessage();
+    await showMissingContent();
     return { ok: false, config };
   }
 
