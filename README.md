@@ -65,8 +65,10 @@ níže; kroky s `start.bat` v tomto README platí pro exe stejně — jen místo
 
 1. Spusť **`start.bat`** — nastartuje lokální server na `http://localhost:8137`
    a otevře Chrome.
-2. Pokud obsah chybí, aplikace **sama nabídne nahrání**; jinak klikni na start
-   panelu na **„Nahrát novou prezentaci“**.
+2. Pokud obsah chybí, aplikace **sama nabídne nahrání** — průvodce se otevře
+   při výběru PDF režimu, při kliknutí na start i z tlačítka **„Nahrát
+   prezentaci“** na prázdné scéně; jinak klikni na start panelu na **„Nahrát
+   novou prezentaci“**.
 3. **Přetáhni `.pptx` do okna** (nebo klikni a vyber soubor). Aplikace sama:
    nahraje soubor → zanalyzuje prezentaci → vytáhne videa → **převede ji do
    PDF** (přes lokálně nainstalovaný PowerPoint, u velkých prezentací to může
@@ -153,6 +155,15 @@ aplikace, překrytí nevadí). Pomáhá i vypnout spořič/zámek obrazovky.
 **PDF má okraje kolem slajdů (žlutý proužek v aplikaci)** — PDF vzniklo tiskem
 (tiskárna přidává okraje papíru). Vytvoř ho znovu průvodcem (automatický
 export), nebo v PowerPointu přes `Soubor → Uložit jako → typ PDF`.
+
+**Prázdná scéna s hláškou „Chybí prezentace“ (PDF režim)** — na tomhle stroji
+zatím není nahraný žádný obsah. Klikni na **`Nahrát prezentaci`** (nebo znovu
+vyber PDF režim na start panelu — průvodce se otevře sám) a přetáhni `.pptx`.
+Starší verze tu ukazovaly vývojářskou hlášku „Chybí obsah — spusť
+tools/prep.py“ — tu plně nahradil právě tento průvodce. Pokud hláška místo
+toho vyzývá ke spuštění přes `TownhallTitulky.exe` nebo `start.bat`, běží
+aplikace proti statickému serveru bez přípravy obsahu (`serve.ps1`) — spusť ji
+uvedeným způsobem.
 
 **Nahrání prezentace hlásí chybu / „Příprava vyžaduje Python server“** —
 wizard potřebuje Python server (`tools/serve.py`), který `start.bat` spouští
@@ -247,6 +258,7 @@ tools/serve.py        lokální server (Python, MIME + Range + API přípravy)
 tools/serve.ps1       lokální server (PowerShell fallback, jen statika)
 tools/export-pdf.ps1  PPTX → PDF přes PowerPoint (volá ho server)
 tools/test-api.py     testy API přípravy
+tests/                Puppeteer suity (fresh-machine, static-501, pdfmode)
 content/              slides.pdf, videos/, config.json — negitováno
 start.bat/stop.bat    spuštění/zastavení serveru + otevření Chrome
 ```

@@ -101,3 +101,22 @@
 - `.gitignore` doplněn o `tests/data-*` fixtures a `package.json`/`lock`
   (projekt je záměrně bez runtime npm závislostí; zabrání náhodnému commitu
   při `npm i` bez `--no-save`).
+
+## Fáze 4 — rebuild + docs
+
+- README: stará vývojářská hláška nikdy neměla vlastní troubleshooting záznam
+  (žila jen v UI) — přidán nový záznam „Prázdná scéna s hláškou Chybí
+  prezentace" popisující empty-state flow (tlačítko / automatický průvodce /
+  varianta bez API), včetně zmínky, že starou hlášku plně nahradil průvodce.
+  Doplněn krok 2 hlavní cesty (všechny tři vstupní body) a `tests/` ve
+  struktuře projektu.
+- Baterie na finálním kódu: Puppeteer 38/38 (fresh-machine 18, static-501 9,
+  pdfmode 11), `prep.py --self-test` OK, `test-api.py` OK, `node --check`
+  všech `app/*.js` OK, 0 chyb v konzoli.
+- Rebuild z čistého `publish/` (smazán před buildem): build OK, vestavěný
+  smoke test OK, `TownhallTitulky.exe` 9,3 MB, FileVersion 1.0.0.26.
+- Navíc ověřen terénní scénář: exe zkopírován do prázdné složky mimo repo,
+  spuštěn s `--no-browser` — `/api/content/status` vrací
+  `{hasPdf:false, hasConfig:false}`, bundlovaný `app/slides.js` obsahuje
+  „Chybí prezentace" a neobsahuje `prep.py`.
+- VERIFY sekce zadání zůstává na operátorovi (test na cizím stroji).
